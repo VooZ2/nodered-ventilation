@@ -114,6 +114,9 @@ Sukuriami diagnostikos sensoriai:
 -   CO₂ kilimo greitis (ppm/min)
 -   Rate boost aktyvumo indikatorius
 
+<img width="1636" height="867" alt="Screenshot 2026-02-12 at 22 35 46" src="https://github.com/user-attachments/assets/23469078-502e-459d-80bb-3a06cc813147" />
+
+
 Vidinė atmintis saugo iki 14 dienų istoriją kalibravimui.
 
 ------------------------------------------------------------------------
