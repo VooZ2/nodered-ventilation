@@ -1,13 +1,13 @@
 # 🌬️ Komfovent Smart Automation
 
+<img width="1450" height="508" alt="Screenshot 2026-02-12 at 22 46 20" src="https://github.com/user-attachments/assets/40f036b9-5d66-4f8a-9ecc-0869ea52c75c" />
+
 Profesionalus rekuperatoriaus valdymo ir adaptyvaus CO₂ mokymosi
 sprendimas, sukurtas **Node-RED** aplinkai ir integruotas su **Home
 Assistant**.
 
 Sistema dinamiškai reguliuoja vėdinimą realiu laiku, prisitaiko prie
 gyventojų ritmo ir optimizuoja energijos sąnaudas.
-
-<img width="1506" height="735" alt="Screenshot 2026-02-12 at 22 37 13" src="https://github.com/user-attachments/assets/6d9da658-a2e9-4ccd-9b2c-bf43b6e0ca61" />
 
 ------------------------------------------------------------------------
 
