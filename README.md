@@ -7,6 +7,8 @@ Assistant**.
 Sistema dinamiškai reguliuoja vėdinimą realiu laiku, prisitaiko prie
 gyventojų ritmo ir optimizuoja energijos sąnaudas.
 
+<img width="1506" height="735" alt="Screenshot 2026-02-12 at 22 37 13" src="https://github.com/user-attachments/assets/6d9da658-a2e9-4ccd-9b2c-bf43b6e0ca61" />
+
 ------------------------------------------------------------------------
 
 # 🧠 Realaus laiko valdymo logika (Control Flow)
