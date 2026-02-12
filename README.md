@@ -1,140 +1,132 @@
-# 🌬️ Komfovent Rekuperatoriaus Automatika v3.2.3
+# 🌬️ Komfovent Smart Automation
 
-Išmani rekuperatoriaus valdymo sistema, sukurta **Node-RED** aplinkoje ir integruota su **Home Assistant**.
+Profesionalus rekuperatoriaus valdymo ir adaptyvaus CO₂ mokymosi
+sprendimas, sukurtas **Node-RED** aplinkai ir integruotas su **Home
+Assistant**.
 
-Sistema dinamiškai reguliuoja vėdinimo intensyvumą realiu laiku, užtikrindama:
+Sistema dinamiškai reguliuoja vėdinimą realiu laiku, prisitaiko prie
+gyventojų ritmo ir optimizuoja energijos sąnaudas.
 
-- ✅ optimalią oro kokybę  
-- ✅ energijos taupymą  
-- ✅ stabilų ir prognozuojamą veikimą  
+------------------------------------------------------------------------
 
----
+# 🧠 Realaus laiko valdymo logika (Control Flow)
 
-# 🚀 Pagrindinės funkcijos
+Sprendimas priimamas griežta prioritetų tvarka (nuo aukščiausio):
 
-## 🔁 Griežta prioritetų hierarchija
-Kritinės būsenos (pvz., STOP FLAGS ar saugos signalai) visada turi aukštesnį prioritetą nei komforto ar CO₂ logika.
+## 1️⃣ STOP FLAGS (Hard Block)
 
-## 📈 Išmanusis CO₂ kilimo sekimas (Rate Boost)
-Sistema reaguoja ne tik į aukštą CO₂ lygį, bet ir į jo kilimo greitį (**ppm/min**).
+-   Aptikus įrenginio klaidą -- rekuperatorius išjungiamas.
+-   Automatikos vykdymas sustabdomas.
+-   Siunčiamas pranešimas (jei nustatyta).
 
-Tai leidžia:
-- užkardyti oro kokybės suprastėjimą dar prieš jam įvykstant  
-- padidinti ventiliaciją tik tada, kai to realiai reikia  
+## 2️⃣ Vonios OVR (Histerezė)
 
-## 🌗 Automatinis režimų perjungimas
-Skirtinga logika taikoma:
+-   Įjungiamas \>80% drėgmei.
+-   Išjungiamas tik jei \<70% išsilaiko 5 min.
+-   Maksimalus ventiliatoriaus greitis (100%).
 
-- 🌙 Naktį  
-- ☀️ Dieną  
-- 🔥 Šiltu sezonu (>18°C)  
-- 🏠 Išvykus iš namų  
+## 3️⃣ ARMED_AWAY režimas
 
-## 📊 Pilna telemetrija
-Home Assistant rodomi sensoriai pateikia:
+-   Jei signalizacija „armed_away":
+    -   Vienkartinis pilnas išvėdinimas, jei CO₂ ≥ 800 ppm.
+    -   Vėliau -- OFF (energijos taupymas).
 
-- dabartinį CO₂ kilimo greitį  
-- aktyvų „Boost“ režimą  
-- pasirinktą logikos būseną su atributais  
+## 4️⃣ Langų saugiklis
 
----
+-   Jei langai atidaryti \>10 min -- rekuperatorius išjungiamas.
 
-# 🏗️ Valdymo logika (Prioritetų seka)
+## 5️⃣ Diena / Naktis režimas
 
-Sprendimas priimamas tokia tvarka (nuo svarbiausio):
+-   **Naktis** -- minimalus 35%, bet gali kilti pagal CO₂.
+-   **Diena (\>18°C)** -- įjungiamas tik jei CO₂ ≥ 800 ppm.
+-   **Kitu atveju** -- valdymas pagal CO₂ laiptus.
 
-1. 🛑 **STOP FLAGS**  
-   Kritinis sustabdymas aptikus sistemos klaidą.
+------------------------------------------------------------------------
 
-2. 🚿 **Vonios OVR**  
-   Drėgmei viršijus 80% → įjungiamas maksimalus vėdinimas.  
-   Išjungiamas tik kai <70% išsilaiko 5 min.
+# 📊 CO₂ laiptai (Base Ventilation Steps)
 
-3. 🛡️ **ARMED_AWAY režimas**  
-   Energijos taupymas išvykus.  
-   Galimas vienkartinis CO₂ „Boost“ išvėdinimui.
+ | CO₂ (ppm) | Fan (%) |
+|----------:|--------:|
+| < 600     | 20%     |
+| 600–749   | 30%     |
+| 750–899   | 45%     |
+| 900–1099  | 70%     |
+| ≥ 1100    | 100%    |
 
-4. 🪟 **Langų saugiklis**  
-   Jei langai atidaryti ilgiau nei 10 min → vėdinimas stabdomas.
+------------------------------------------------------------------------
 
-5. 📈 **Rate Boost (CO₂ kilimo greitis)**  
-   Jei CO₂ ≥ 600 ppm ir greitai kyla → laikinai padidinamas ventiliatoriaus greitis.
+# 📈 Rate-Based Boost (CO₂ kilimo greitis)
 
-6. 🌙🌤️ **Diena / Naktis**  
-   Standartinis režimas pagal laiką ir CO₂ laiptus.
+Sistema reaguoja ne tik į CO₂ lygį, bet ir į jo **kilimo greitį
+(ppm/min)**.
 
----
+## Slenksčiai:
 
-# ⚙️ Techniniai saugikliai
+| Kilimo tempas | Fan (%) |
+|--------------:|--------:|
+| ≥ 10 ppm/min  | 55%     |
+| ≥ 18 ppm/min  | 65%     |
+| ≥ 30 ppm/min  | 80%     |
 
-| Saugiklis | Funkcija |
-|------------|----------|
-| **Alarm Fallback** | HA restarto metu naudojama paskutinė žinoma saugi signalizacijos būsena iš atminties |
-| **Robust States** | Fallback keliai nuskaitant HA būsenų cache |
-| **RBE Filtras** | Komandos siunčiamos tik pasikeitus būsenai |
-| **Hold Timer** | „Rate Boost“ režimas išlaikomas min. 10 min. |
-| **Low-CO₂ Guard** | Rate Boost neaktyvuojamas, jei CO₂ < 600 ppm |
+## Saugikliai:
 
----
+-   Aktyvuojamas tik jei CO₂ ≥ 600 ppm
+-   Maks. fan = 80%
+-   Hold laikotarpis = 10 min
+-   Deadband = ±2 ppm/min
 
-# 📊 Sukuriami Home Assistant sensoriai
+------------------------------------------------------------------------
 
-Srautas automatiškai maitina šiuos subjektus:
+# 🤖 Adaptyvus CO₂ mokymasis (Learning Module)
 
-### `sensor.komfovent_logic`
-Dabartinis logikos režimas (lietuviškai), pvz.:
+Sistema kas parą analizuoja paskutinių 24h duomenis ir koreguoja
+įsijungimo slenkstį.
 
-- Diena  
-- Naktis  
-- CO₂ kilimas  
-- OVR  
-- STOP  
+## Profiliai
 
-### `sensor.current_co2_rate`
-CO₂ kilimo greitis (ppm/min).
+-   Darbo dienomis analizuojamos tik nustatytos aktyvios valandos.
+-   Savaitgaliais analizuojama visa 24h.
 
-### `binary_sensor.rate_boost_active`
-Indikatorius, rodantis aktyvų „Boost“ režimą.
+## Proporcinė adaptacija
 
----
+delta = -round((avgRate - TARGET_RATE) \* K)
 
-# 🛠️ Naudojami pagrindiniai entity
+Kur: - TARGET_RATE = 60 ppm/h - K = 0.2 - max ±25 ppm per parą
 
-- `alarm_control_panel.home` — Signalizacija  
-- `sensor.oro_stotele_carbon_dioxide` — CO₂ jutiklis  
-- `sensor.bathroom_humidity` — Drėgmės jutiklis  
-- `binary_sensor.langai` — Langų kontaktai  
-- `sensor.boiler_outside_temperature` — Lauko temperatūra  
-- `switch.start_stop` — Rekuperatoriaus valdymas  
-- `number.intake_level_1` — Įsiurbimo ventiliatoriaus greitis  
-- `number.exhaust_level_1` — Ištraukimo ventiliatoriaus greitis  
+## Learning Guards (apsaugos)
 
----
+### Stability Lock
 
-# 📦 Architektūra
+-   Jei max CO₂ \< 650 ppm → mokymasis nevykdomas
+-   Jei svyravimo diapazonas \< 100 ppm → mokymasis nevykdomas
 
-- Node-RED — sprendimų priėmimo logika  
-- Home Assistant — sensoriai ir UI  
-- Context Storage — telemetrijos kaupimas (iki ~14 dienų)  
+### Gap Guard
 
----
+-   Jei trūksta \>35% duomenų taškų → adaptacija blokuojama
 
-# 🔮 Tolimesni patobulinimai
+------------------------------------------------------------------------
 
-- STOP FLAGS debounce filtras  
-- CO₂ glitch apsauga (>2000 ppm sanity cap)  
-- Minimalus palaikomas ventiliavimas vasarą  
-- Automatinis force_mode reset po testų
-- CO₂ auto threshold learning integracija
+# 📡 Telemetrija (Home Assistant)
 
----
+Sukuriami diagnostikos sensoriai:
 
-# 📜 Versija
+-   Logikos režimas (Diena, Naktis, Išvykę, STOP, OVR, CO₂ kilimas)
+-   CO₂ kilimo greitis (ppm/min)
+-   Rate boost aktyvumo indikatorius
 
-**v3.2.3**  
-Stabili versija su:
+Vidinė atmintis saugo iki 14 dienų istoriją kalibravimui.
 
-- pataisyta robust state logika  
-- LT režimų atvaizdavimu  
-- išvalyta Rate telemetry schema  
-- stabilizuotu RBE veikimu  
+------------------------------------------------------------------------
+
+# 🛡 Atsparumo mechanizmai (Fail‑Safes)
+
+-   Alarm fallback po HA restarto
+-   Robust HA state reading
+-   RBE filtras (komandos tik pasikeitus būsenai)
+-   Hard stop sauga STOP FLAGS atveju
+
+------------------------------------------------------------------------
+
+# 🔢 Versija
+
+**v4.0.0**
