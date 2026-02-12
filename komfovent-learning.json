@@ -1,0 +1,174 @@
+[
+    {
+        "id": "auto_co2_log_tab",
+        "type": "tab",
+        "label": "CO₂ auto threshold learning",
+        "disabled": false,
+        "info": "Auto-learning CO₂ threshold:\n- Logs CO₂ kas 10 min.\n- Kas parą 03:00 (LT) analizuoja paskutines 24h, bet profiliui naudoja VAKAR (LT), kad pirmadienio 03:00 nenaudotų darbo dienos profilio sekmadienio duomenims.\n- Profiliai:\n  • Darbo dienos: 06:00–08:00 ir 16:30–23:00 (LT)\n  • Savaitgaliai: pilnos 24h\n- Learning Guards (hard-stop):\n  • Stability Lock: jei max CO₂ < 650 ARBA (max-min) < 100 → slenkstis nekeičiamas\n  • Gap Guard: jei trūksta >35% tikėtinų taškų → slenkstis nekeičiamas\n- Delta: proportional gain K=0.2 (ppm/h), targetRate=60, clamp ±25/d.\n- Threshold clamp: 550..950"
+    },
+    {
+        "id": "inj_co2_log",
+        "type": "inject",
+        "z": "auto_co2_log_tab",
+        "name": "Scheduler: Log CO2 (10 min)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "600",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 190,
+        "y": 100,
+        "wires": [
+            [
+                "func_co2_read"
+            ]
+        ]
+    },
+    {
+        "id": "func_co2_read",
+        "type": "function",
+        "z": "auto_co2_log_tab",
+        "name": "Learning: Log CO2 (10 min)",
+        "func": "// ===== CO₂ log kaupimas =====\n// • Skaito CO₂ reikšmę iš HA global cache\n// • Į flow.co2_log prideda tašką kas 10 min\n// • Ignoruoja netinkamas reikšmes (unknown/unavailable/NaN)\n// • Laiko max 2016 taškų (~14 dienų, jei kas 10 min)\n// • Status’e rodo paskutinę reikšmę ir log’o apimtį\n\nlet ha = global.get('homeassistant') || {};\nlet states =\n  (ha?.homeAssistant?.states) ||\n  (ha?.homeassistant?.states) ||\n  (ha?.states) ||\n  (global.get('homeassistant.homeAssistant.states')) ||\n  {};\n\nconst ENTITY = 'sensor.oro_stotele_carbon_dioxide';\n\nlet st = states[ENTITY]?.state;\nlet val = parseFloat(st);\n\n// Tik log’inam validžias skaitines reikšmes\nif (!isFinite(val)) {\n  node.status({ fill: \"red\", shape: \"ring\", text: `CO2 invalid: ${st}` });\n  return null;\n}\n\nlet logs = flow.get('co2_log');\nif (!Array.isArray(logs)) logs = [];\n\nlet now = Date.now();\nlogs.push({ ts: now, val: val });\n\n// Retention: max 2016 taškų (~14 dienų @ 10 min)\nwhile (logs.length > 2016) logs.shift();\n\nflow.set('co2_log', logs);\n\n// Status info\nconst last = logs[logs.length - 1];\nconst first = logs[0];\nconst ageHrs = ((last.ts - first.ts) / 3600000).toFixed(1);\n\nnode.status({\n  fill: \"green\",\n  shape: \"dot\",\n  text: `CO2 ${Math.round(val)} ppm | points ${logs.length} | span ${ageHrs}h`\n});\n\n// Debug (nebūtina, bet patogu testuojant)\nmsg.payload = {\n  entity: ENTITY,\n  co2: val,\n  points: logs.length,\n  span_hours: Number(ageHrs),\n  ts: now\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 490,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "inj_auto_thres",
+        "type": "inject",
+        "z": "auto_co2_log_tab",
+        "name": "Learning: Threshold Update 03:00 LT",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "00 03 * * *",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 210,
+        "y": 160,
+        "wires": [
+            [
+                "func_auto_thres_pro"
+            ]
+        ]
+    },
+    {
+        "id": "func_auto_thres_pro",
+        "type": "function",
+        "z": "auto_co2_log_tab",
+        "name": "Learning: Threshold Compute (Profiles + Guards",
+        "func": "// ===== CO₂ slenksčio mokymasis (PRO) =====\n//\n// Profiliai:\n// - Darbo dienos: analizuojamos tik aktyvios valandos (06:00–08:00, 16:30–23:00) LT laiku\n// - Savaitgaliai: analizuojama pilna 24h laiko juosta\n//\n// Apsaugos (guards):\n// - Stabilumo saugiklis: maxCO₂ < 650 ARBA (max-min) < 100 → mokymasis nevykdomas\n// - Tarpų saugiklis: prarasta >35% tikėtinų taškų → mokymasis nevykdomas\n//\n// Delta (slenksčio pokytis):\n// - Skaičiuojamas vidutinis kylantis tempas ppm/h (tik teigiami segmentai)\n// - Proporcinė adaptacija: delta = -round((avgRate - targetRate) * K), ribojama iki ±25 per parą\n\nconst TZ = 'Europe/Vilnius';\nconst SAMPLE_MIN = 10;\n\nconst STABILITY_MAX_MIN = 650;   // reikia bent tokio piko, kad būtų iš ko mokytis\nconst STABILITY_RANGE_MIN = 100; // reikia bent tokio svyravimo diapazono\nconst GAP_MISSING_MAX = 0.35;    // >35% trūkstamų taškų -> blokavimas\n\nconst TARGET_RATE = 60;          // ppm/h\nconst K = 0.2;                   // jautrumas (gain)\nconst DELTA_MAX = 25;            // max pokytis per parą\n\nconst THRESH_MIN = 550;\nconst THRESH_MAX = 950;\n\n// ---------- pagalbinės funkcijos ----------\nfunction isNum(v) { return v !== null && v !== undefined && isFinite(v); }\n\nfunction ltParts(ts) {\n  const parts = new Intl.DateTimeFormat('en-GB', {\n    timeZone: TZ,\n    year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', second: '2-digit',\n    hour12: false\n  }).formatToParts(new Date(ts));\n  const get = (t) => parts.find(p => p.type === t)?.value;\n  return {\n    y: Number(get('year')),\n    mo: Number(get('month')),\n    d: Number(get('day')),\n    hh: Number(get('hour')),\n    mm: Number(get('minute')),\n    ss: Number(get('second'))\n  };\n}\n\nfunction ltMinutes(ts) {\n  const p = ltParts(ts);\n  return p.hh * 60 + p.mm;\n}\n\nfunction ltDayOfWeek(ts) {\n  // 0..6 (Sek..Še) LT laiku\n  const wd = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(new Date(ts));\n  const map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };\n  return map[wd] ?? 0;\n}\n\nfunction isWeekendLT(ts) {\n  const dow = ltDayOfWeek(ts);\n  return dow === 0 || dow === 6;\n}\n\nfunction inActiveWindowWeekday(ts) {\n  const m = ltMinutes(ts);\n  // 06:00–08:00 => [360..480)\n  // 16:30–23:00 => [990..1380)\n  return (m >= 360 && m < 480) || (m >= 990 && m < 1380);\n}\n\nfunction clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }\n\n// ---------- nuskaitom log'ą ----------\nlet logs = flow.get('co2_log') || [];\n\nif (!Array.isArray(logs)) {\n  node.status({ fill: 'red', shape: 'ring', text: 'co2_log nėra masyvas' });\n  return null;\n}\nif (logs.length < 2) {\n  node.status({ fill: 'yellow', shape: 'ring', text: `per mažai taškų: ${logs.length}` });\n  return null;\n}\n\nconst now = Date.now();\nconst start = now - 24 * 60 * 60 * 1000;\n\n// paskutinės 24h validūs taškai\nlet logs24 = logs.filter(x => x && isNum(x.ts) && isNum(x.val) && x.ts >= start && x.ts <= now);\n\nif (logs24.length < 10) {\n  node.status({ fill: 'yellow', shape: 'ring', text: `24h taškų per mažai: ${logs24.length}` });\n  return null;\n}\n\n// ---------- profilio parinkimas (sutvarkytas 03:00 atvejis) ----------\n// Profilį renkam pagal „vakar“ LT kontekstą: 03:00 pirmadienį turi žiūrėti į sekmadienio profilį\nconst referenceTs = now - 12 * 60 * 60 * 1000;\nconst weekendProfile = isWeekendLT(referenceTs);\nconst profile = weekendProfile ? 'WEEKEND_24H' : 'WEEKDAY_ACTIVE';\n\n// pritaikom profilio filtrą\nlet logsP = weekendProfile ? logs24 : logs24.filter(p => inActiveWindowWeekday(p.ts));\n\nif (logsP.length < 6) {\n  node.status({ fill: 'yellow', shape: 'ring', text: `profilis ${profile}: per mažai taškų (${logsP.length})` });\n  return null;\n}\n\n// ---------- Tarpų saugiklis (Gap Guard) ----------\nconst spanMin = (logs24[logs24.length - 1].ts - logs24[0].ts) / 60000;\nconst expected = Math.max(1, Math.round(spanMin / SAMPLE_MIN) + 1);\nconst missingFrac = clamp(1 - (logs24.length / expected), 0, 1);\n\nlet gapBlocked = (missingFrac > GAP_MISSING_MAX);\n\n// ---------- Stabilumo saugiklis (Stability Lock) ----------\nlet minCo2 = Infinity;\nlet maxCo2 = -Infinity;\nfor (const p of logsP) {\n  if (p.val < minCo2) minCo2 = p.val;\n  if (p.val > maxCo2) maxCo2 = p.val;\n}\nconst range = maxCo2 - minCo2;\n\nlet stabilityBlocked = (maxCo2 < STABILITY_MAX_MIN) || (range < STABILITY_RANGE_MIN);\n\n// ---------- Vidutinis kylantis tempas (ppm/h) ----------\nlet sumRate = 0;\nlet cnt = 0;\nlet skippedGaps = 0;\n\nfor (let i = 1; i < logsP.length; i++) {\n  let dtMin = (logsP[i].ts - logsP[i - 1].ts) / 60000;\n\n  // praleidžiam keistus tarpus\n  if (dtMin <= 0 || dtMin > 20) {\n    skippedGaps++;\n    continue;\n  }\n\n  let dCo2 = logsP[i].val - logsP[i - 1].val;\n\n  // skaičiuojam tik kylančius segmentus\n  if (dCo2 > 0) {\n    sumRate += (dCo2 / dtMin) * 60; // ppm/h\n    cnt++;\n  }\n}\n\nlet avgRate = cnt ? (sumRate / cnt) : 0;\n\n// ---------- Ankstesnis slenkstis ----------\nlet prev = flow.get('auto_co2_on_threshold');\nlet threshPrev = isNum(prev) ? Number(prev) : 750;\n\n// ---------- Proporcinė delta ----------\nlet difference = avgRate - TARGET_RATE;\nlet delta = -Math.round(difference * K);\ndelta = clamp(delta, -DELTA_MAX, DELTA_MAX);\n\n// ---------- Taikom apsaugas ----------\nlet blocked = gapBlocked || stabilityBlocked;\nlet thresh = threshPrev;\n\nif (!blocked) {\n  thresh = Math.round(threshPrev + delta);\n  thresh = clamp(thresh, THRESH_MIN, THRESH_MAX);\n} else {\n  delta = 0;\n}\n\nflow.set('auto_co2_on_threshold', thresh);\n\n// ---------- Status ----------\nlet statusBits = [];\nstatusBits.push(profile);\nstatusBits.push(`avg ${avgRate.toFixed(1)} ppm/h`);\nstatusBits.push(`delta ${delta}`);\nstatusBits.push(`thr ${threshPrev}->${thresh}`);\nstatusBits.push(`pts24 ${logs24.length}/${expected}`);\nstatusBits.push(`miss ${(missingFrac * 100).toFixed(0)}%`);\nstatusBits.push(`max ${Math.round(maxCo2)} range ${Math.round(range)}`);\nstatusBits.push(`riseSeg ${cnt}`);\nif (gapBlocked) statusBits.push('GAP_BLOCK');\nif (stabilityBlocked) statusBits.push('STABILITY_BLOCK');\n\nnode.status({\n  fill: blocked ? 'yellow' : 'green',\n  shape: blocked ? 'ring' : 'dot',\n  text: statusBits.join(' | ')\n});\n\n// ---------- Išvestis į HA ----------\nmsg.payload = { entity_id: 'input_number.co2_on_threshold', value: thresh };\n\n// debug laukai (patogu tikrinimui)\nmsg.profile = profile;\nmsg.avgRate_ppmh = avgRate;\nmsg.targetRate_ppmh = TARGET_RATE;\nmsg.K = K;\nmsg.delta = delta;\nmsg.prevThresh = threshPrev;\nmsg.thresh = thresh;\nmsg.points24 = logs24.length;\nmsg.expected24 = expected;\nmsg.missingFrac = missingFrac;\nmsg.maxCo2 = maxCo2;\nmsg.minCo2 = minCo2;\nmsg.range = range;\nmsg.risingSegments = cnt;\nmsg.skippedGaps = skippedGaps;\nmsg.blocked = blocked;\nmsg.blockReasons = { gapBlocked, stabilityBlocked };\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 600,
+        "y": 160,
+        "wires": [
+            [
+                "call_set_threshold"
+            ]
+        ]
+    },
+    {
+        "id": "call_set_threshold",
+        "type": "api-call-service",
+        "z": "auto_co2_log_tab",
+        "name": "input_number.set_value",
+        "server": "de0e06cd.8456e8",
+        "version": 7,
+        "debugenabled": false,
+        "action": "input_number.set_value",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"entity_id\":\"{{payload.entity_id}}\",\"value\":{{payload.value}}}",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "input_number",
+        "service": "set_value",
+        "x": 930,
+        "y": 160,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "39b60ebdedd245de",
+        "type": "comment",
+        "z": "auto_co2_log_tab",
+        "name": "Module: CO₂ Auto Threshold Learning",
+        "info": "CO₂ Auto Threshold Learning modulis.\n\nPaskirtis:\n- Kaupia CO₂ reikšmes kas 10 min (flow.co2_log).\n- Kartą per parą (03:00 LT) analizuoja paskutines 24h.\n- Taiko profilius:\n  - Darbo dienos: 06:00–08:00 ir 16:30–23:00\n  - Savaitgaliai: 24h\n- Naudoja apsaugas (Stability Lock, Gap Guard).\n- Skaičiuoja proporcinį delta ir atnaujina:\n  input_number.co2_on_threshold\n\nFlow kintamieji:\n- flow.co2_log\n- flow.auto_co2_on_threshold\n\nŠis modulis nekeičia rekuperatoriaus tiesiogiai —\njis tik adaptuoja CO₂ įjungimo slenkstį.",
+        "x": 250,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "de0e06cd.8456e8",
+        "type": "server",
+        "name": "Home Assistant",
+        "version": 6,
+        "addon": false,
+        "rejectUnauthorizedCerts": false,
+        "ha_boolean": [
+            "y",
+            "yes",
+            "true",
+            "on",
+            "home",
+            "open"
+        ],
+        "connectionDelay": true,
+        "cacheJson": true,
+        "heartbeat": false,
+        "heartbeatInterval": "30",
+        "areaSelector": "friendlyName",
+        "deviceSelector": "friendlyName",
+        "entitySelector": "friendlyName",
+        "statusSeparator": "at: ",
+        "statusYear": "hidden",
+        "statusMonth": "short",
+        "statusDay": "numeric",
+        "statusHourCycle": "h23",
+        "statusTimeFormat": "h:m",
+        "enableGlobalContextStore": true
+    },
+    {
+        "id": "5a0276eeaa718d56",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-home-assistant-websocket": "0.80.3"
+        }
+    }
+]
