@@ -131,28 +131,42 @@ Vidinė atmintis saugo iki 14 dienų istoriją kalibravimui.
 
 ------------------------------------------------------------------------
 
-# TODO (Planuojami patobulinimai)
+# TODO (v4.1)
 
 ## Rate-based boost optimizacija (Netatmo 5 min atnaujinimai)
 
-- Skaičiuoti kilimo greitį naudojant 10–15 min slankų langą vietoje vieno intervalo
-- Alternatyva: reikalauti 2 iš eilės rate ≥ slenksčio patvirtinimų
-- Koreguoti rate slenksčius pagal 5 min sensoriaus granuliaciją
+- Skaičiuoti CO₂ kilimo greitį naudojant 10–15 min slankų langą vietoje vieno intervalo
+- Reikalauti 2 iš eilės rate ≥ slenksčio patvirtinimų prieš aktyvuojant boost
+- Koreguoti rate slenksčius pagal realią 5 min sensoriaus granuliaciją
+- Įvesti minimalų ΔCO₂ (pvz., ≥ 8–10 ppm per intervalą)
 
 ## Learning threshold ir rate-boost susiejimas
 
 - Rate boost aktyvavimo ribą sieti su auto_co2_on_threshold
-- Pvz.: boost leidžiamas tik jei CO₂ ≥ threshold arba (threshold - 50)
+- Pvz.: boost leidžiamas tik jei CO₂ ≥ threshold arba CO₂ ≥ (threshold - 50)
 
 ## Rate boost stabilizavimas
 
 - Įvesti cooldown 15–20 min tarp boost aktyvacijų
-- Soft-hold mechanizmas (nutraukti boost jei CO₂ krenta)
+- Įdiegti soft-hold mechanizmą (nutraukti boost jei CO₂ krenta)
+- Apriboti maksimalų boost įsijungimų skaičių per valandą
 
 ## Telemetrijos analizė
 
-- Atlikti rate_log analizę ir nustatyti realius namų CO₂ kilimo profilius
-- Įvertinti realų boost įsijungimų dažnumą per parą
+- Analizuoti rate_log ir nustatyti realius CO₂ kilimo profilius
+- Įvertinti boost įsijungimų dažnumą per parą
+- Patikslinti slenksčius pagal realią dinamiką
+
+## Duomenų kokybės apsaugos
+
+- Įdiegti realaus laiko outlier filtrą (>300–500 ppm per atnaujinimą ignoruoti)
+- Loguoti atmestus outlier atvejus diagnostikai
+
+## Filtro užterštumo skaičiuotuvas
+
+- Skaičiuoti ventiliatorių darbo valandas
+- Rodyti filtrų nusidėvėjimą procentais HA dashboard'e
+- Adaptuoti nusidėvėjimą pagal realų fan %
 
 ------------------------------------------------------------------------
 
