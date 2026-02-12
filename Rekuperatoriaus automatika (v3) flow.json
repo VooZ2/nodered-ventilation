@@ -1,0 +1,1282 @@
+[
+    {
+        "id": "tab_komfovent_v3",
+        "type": "tab",
+        "label": "Rekuperatoriaus automatika (v3)",
+        "disabled": false,
+        "info": "Komfovent rekuperatoriaus automatika pagal: signalizaciją (armed_away), langus (10 min guard), CO2, lauko temperatūrą, vonios drėgmę ir Komfovent STOP FLAGS.\n\nPrioritetai: STOP FLAGS > Vonios OVR > ARMED_AWAY (vienkartinis CO2 boost 10 min) > Langai ilgiau 10 min > Naktis (min 35% + CO2 laiptai) > Diena (temp logika + CO2 laiptai).\n\nNaudojami entity:\n- alarm_control_panel.home\n- binary_sensor.langai\n- sensor.oro_stotele_carbon_dioxide\n- sensor.boiler_outside_temperature\n- sensor.bathroom_humidity\n- sensor.alarm_status_stop_flags\n- switch.start_stop\n- number.intake_level_1\n- number.exhaust_level_1\n- switch.recup_switch_relay\n- notify.mobile_app_g_iphone\n\nSvarbu: šiame flow HA call-service node'ų Entity ID laukai palikti TUŠTI, o entity_id paduodamas per Data (mustache), todėl viskas veikia dinamiškai."
+    },
+    {
+        "id": "cmt_v3",
+        "type": "comment",
+        "z": "tab_komfovent_v3",
+        "name": "Komfovent v3.2.3",
+        "info": "",
+        "x": 380,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "inj_force_night",
+        "type": "inject",
+        "z": "tab_komfovent_v3",
+        "name": "TEST: force NIGHT",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "force_night",
+        "payload": "",
+        "payloadType": "date",
+        "x": 130,
+        "y": 40,
+        "wires": [
+            [
+                "fn_force_mode"
+            ]
+        ]
+    },
+    {
+        "id": "inj_force_day",
+        "type": "inject",
+        "z": "tab_komfovent_v3",
+        "name": "TEST: force DAY",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "force_day",
+        "payload": "",
+        "payloadType": "date",
+        "x": 120,
+        "y": 80,
+        "wires": [
+            [
+                "fn_force_mode"
+            ]
+        ]
+    },
+    {
+        "id": "inj_force_clear",
+        "type": "inject",
+        "z": "tab_komfovent_v3",
+        "name": "TEST: clear force",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "force_clear",
+        "payload": "",
+        "payloadType": "date",
+        "x": 120,
+        "y": 120,
+        "wires": [
+            [
+                "fn_force_mode"
+            ]
+        ]
+    },
+    {
+        "id": "inj_run_now",
+        "type": "inject",
+        "z": "tab_komfovent_v3",
+        "name": "RUN now",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "run",
+        "payload": "",
+        "payloadType": "date",
+        "x": 100,
+        "y": 180,
+        "wires": [
+            [
+                "fn_get_states"
+            ]
+        ]
+    },
+    {
+        "id": "inj_tick",
+        "type": "inject",
+        "z": "tab_komfovent_v3",
+        "name": "Kas 5 min (08-21)",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "*/5 8-21 * * *",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "tick",
+        "x": 130,
+        "y": 240,
+        "wires": [
+            [
+                "fn_get_states"
+            ]
+        ]
+    },
+    {
+        "id": "inj_night_schedule",
+        "type": "inject",
+        "z": "tab_komfovent_v3",
+        "name": "22:00 (night)",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "0 22 * * *",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "night_start",
+        "payload": "",
+        "payloadType": "date",
+        "x": 110,
+        "y": 280,
+        "wires": [
+            [
+                "fn_get_states"
+            ]
+        ]
+    },
+    {
+        "id": "inj_day_schedule",
+        "type": "inject",
+        "z": "tab_komfovent_v3",
+        "name": "07:00 (day)",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "0 7 * * *",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "day_start",
+        "payload": "",
+        "payloadType": "date",
+        "x": 110,
+        "y": 320,
+        "wires": [
+            [
+                "fn_get_states"
+            ]
+        ]
+    },
+    {
+        "id": "st_alarm",
+        "type": "server-state-changed",
+        "z": "tab_komfovent_v3",
+        "name": "Signalizacija",
+        "server": "de0e06cd.8456e8",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "alarm_control_panel.home"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": true,
+        "stateType": "str",
+        "ifState": "",
+        "ifStateType": "str",
+        "ifStateOperator": "is",
+        "outputOnlyOnStateChange": true,
+        "for": "1",
+        "forType": "num",
+        "forUnits": "seconds",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "outputProperties": [
+            {
+                "property": "topic",
+                "propertyType": "msg",
+                "value": "alarm",
+                "valueType": "str"
+            }
+        ],
+        "x": 110,
+        "y": 380,
+        "wires": [
+            [
+                "fn_get_states"
+            ]
+        ]
+    },
+    {
+        "id": "st_co2",
+        "type": "server-state-changed",
+        "z": "tab_komfovent_v3",
+        "name": "CO2",
+        "server": "de0e06cd.8456e8",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "sensor.oro_stotele_carbon_dioxide"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": true,
+        "stateType": "num",
+        "ifState": "",
+        "ifStateType": "num",
+        "ifStateOperator": "is",
+        "outputOnlyOnStateChange": true,
+        "for": "2",
+        "forType": "num",
+        "forUnits": "minutes",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "outputProperties": [
+            {
+                "property": "topic",
+                "propertyType": "msg",
+                "value": "co2",
+                "valueType": "str"
+            }
+        ],
+        "x": 90,
+        "y": 440,
+        "wires": [
+            [
+                "fn_get_states"
+            ]
+        ]
+    },
+    {
+        "id": "st_outdoor",
+        "type": "server-state-changed",
+        "z": "tab_komfovent_v3",
+        "name": "Lauko temp",
+        "server": "de0e06cd.8456e8",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "sensor.boiler_outside_temperature"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": true,
+        "stateType": "num",
+        "ifState": "",
+        "ifStateType": "num",
+        "ifStateOperator": "is",
+        "outputOnlyOnStateChange": false,
+        "for": "0",
+        "forType": "num",
+        "forUnits": "minutes",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "outputProperties": [
+            {
+                "property": "topic",
+                "propertyType": "msg",
+                "value": "outdoor",
+                "valueType": "str"
+            }
+        ],
+        "x": 110,
+        "y": 500,
+        "wires": [
+            [
+                "fn_get_states"
+            ]
+        ]
+    },
+    {
+        "id": "st_hum",
+        "type": "server-state-changed",
+        "z": "tab_komfovent_v3",
+        "name": "Vonios drėgmė",
+        "server": "de0e06cd.8456e8",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "sensor.bathroom_humidity"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": true,
+        "stateType": "num",
+        "ifState": "",
+        "ifStateType": "num",
+        "ifStateOperator": "is",
+        "outputOnlyOnStateChange": true,
+        "for": "1",
+        "forType": "num",
+        "forUnits": "minutes",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "outputProperties": [
+            {
+                "property": "topic",
+                "propertyType": "msg",
+                "value": "humidity",
+                "valueType": "str"
+            }
+        ],
+        "x": 120,
+        "y": 560,
+        "wires": [
+            [
+                "fn_get_states"
+            ]
+        ]
+    },
+    {
+        "id": "st_stopflags",
+        "type": "server-state-changed",
+        "z": "tab_komfovent_v3",
+        "name": "Komfovent STOP FLAGS",
+        "server": "de0e06cd.8456e8",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "sensor.alarm_status_stop_flags"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": true,
+        "stateType": "str",
+        "ifState": "",
+        "ifStateType": "str",
+        "ifStateOperator": "is",
+        "outputOnlyOnStateChange": true,
+        "for": "2",
+        "forType": "num",
+        "forUnits": "seconds",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "outputProperties": [
+            {
+                "property": "topic",
+                "propertyType": "msg",
+                "value": "stopflags",
+                "valueType": "str"
+            }
+        ],
+        "x": 150,
+        "y": 620,
+        "wires": [
+            [
+                "fn_get_states"
+            ]
+        ]
+    },
+    {
+        "id": "st_windows",
+        "type": "server-state-changed",
+        "z": "tab_komfovent_v3",
+        "name": "Langai (on/off)",
+        "server": "de0e06cd.8456e8",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "binary_sensor.langai"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": true,
+        "stateType": "str",
+        "ifState": "",
+        "ifStateType": "str",
+        "ifStateOperator": "is",
+        "outputOnlyOnStateChange": true,
+        "for": "2",
+        "forType": "num",
+        "forUnits": "seconds",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "outputProperties": [
+            {
+                "property": "topic",
+                "propertyType": "msg",
+                "value": "windows",
+                "valueType": "str"
+            }
+        ],
+        "x": 110,
+        "y": 680,
+        "wires": [
+            [
+                "fn_windows_guard_start"
+            ]
+        ]
+    },
+    {
+        "id": "fn_windows_guard_start",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Langų saugiklis (start 10 min)",
+        "func": "var st = msg.payload && msg.payload.new_state && msg.payload.new_state.state ? String(msg.payload.new_state.state) : null;\nif (st === 'on') {\n  flow.set('windows_guard_target','on');\n  return {topic:'windows_guard', payload:'start'};\n}\nif (st === 'off') {\n  flow.set('windows_guard_target','off');\n  return {topic:'windows_guard', payload:'start'};\n}\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "x": 420,
+        "y": 560,
+        "wires": [
+            [
+                "tr_windows_10m"
+            ]
+        ]
+    },
+    {
+        "id": "tr_windows_10m",
+        "type": "trigger",
+        "z": "tab_komfovent_v3",
+        "name": "Po 10 min patikrinti langus",
+        "op1": "",
+        "op2": "check",
+        "op1type": "nul",
+        "op2type": "str",
+        "duration": "10",
+        "extend": false,
+        "overrideDelay": true,
+        "units": "min",
+        "reset": "",
+        "bytopic": "all",
+        "topic": "topic",
+        "outputs": 1,
+        "x": 420,
+        "y": 620,
+        "wires": [
+            [
+                "fn_windows_guard_apply"
+            ]
+        ]
+    },
+    {
+        "id": "fn_windows_guard_apply",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Užfiksuoti windows_long_open + RUN",
+        "func": "var g = global.get('homeassistant') || {};\nvar haStates = g.homeAssistant && g.homeAssistant.states ? g.homeAssistant.states : (g.homeassistant && g.homeassistant.states ? g.homeassistant.states : (g.states || {}));\nvar cur = haStates['binary_sensor.langai'] ? String(haStates['binary_sensor.langai'].state) : null;\nvar target = flow.get('windows_guard_target');\nif (target === 'on') {\n  flow.set('windows_long_open', cur === 'on');\n} else if (target === 'off') {\n  flow.set('windows_long_open', false);\n}\nmsg.topic = 'windows_guard_applied';\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "x": 410,
+        "y": 680,
+        "wires": [
+            [
+                "fn_get_states"
+            ]
+        ]
+    },
+    {
+        "id": "fn_force_mode",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Force mode (test)",
+        "func": "if (msg.topic === 'force_night') flow.set('force_mode','night');\nelse if (msg.topic === 'force_day') flow.set('force_mode','day');\nelse if (msg.topic === 'force_clear') flow.set('force_mode', null);\nreturn {topic:'run'};",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "x": 390,
+        "y": 100,
+        "wires": [
+            [
+                "fn_get_states"
+            ]
+        ]
+    },
+    {
+        "id": "fn_get_states",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Get states (robust)",
+        "func": "// ===== Get states (robust) — v3.2.2 (LT timezone + alarm fallback) =====\n//\n// Source of truth:\n// - HA states (global homeassistant cache)\n// - Night/Day logic (Europe/Vilnius)\n// - force_mode testams (\"night\" | \"day\" | null)\n// - Alarm fallback po HA restart (unknown/unavailable)\n\nvar g = global.get('homeassistant') || {};\nvar haStates =\n  (g.homeAssistant && g.homeAssistant.states) ? g.homeAssistant.states :\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n// ---- Entity mapping ----\nvar ENT = {\n  alarm: 'alarm_control_panel.home',\n  windows: 'binary_sensor.langai',\n  co2: 'sensor.oro_stotele_carbon_dioxide',\n  outdoor: 'sensor.boiler_outside_temperature',\n  humidity: 'sensor.bathroom_humidity',\n  stopflags: 'sensor.alarm_status_stop_flags',\n  recup: 'switch.start_stop'\n};\n\n// ---- Helpers ----\nfunction isBad(v) {\n  if (v === null || v === undefined) return true;\n  var s = String(v).toLowerCase();\n  return (s === 'unknown' || s === 'unavailable');\n}\n\nfunction isNum(v) {\n  return v !== null && v !== undefined && isFinite(v);\n}\n\nfunction num(ent) {\n  if (!haStates[ent]) return null;\n  var raw = haStates[ent].state;\n  if (isBad(raw)) return null;\n  var v = parseFloat(raw);\n  return isFinite(v) ? v : null;\n}\n\nfunction str(ent) {\n  if (!haStates[ent]) return null;\n  var raw = haStates[ent].state;\n  if (isBad(raw)) return null;\n  return String(raw);\n}\n\n// ---- Build msg.state ----\nmsg.state = {\n  alarm: str(ENT.alarm),\n  windows: str(ENT.windows),\n  windows_long_open: !!flow.get('windows_long_open'),\n  co2: num(ENT.co2),\n  outdoor: num(ENT.outdoor),\n  humidity: num(ENT.humidity),\n  stopflags: str(ENT.stopflags),\n  recup: str(ENT.recup)\n};\n\n// ---- Alarm fallback (po HA restart) ----\nif (msg.state.alarm) {\n  flow.set('alarm_last_known', msg.state.alarm);\n} else {\n  var lastAlarm = flow.get('alarm_last_known');\n  if (lastAlarm) {\n    msg.state.alarm = lastAlarm;\n    msg.state._alarm_cached = true;\n  }\n}\n\n// ---- recup boolean ----\nmsg.state.recup_is_on =\n  (String(msg.state.recup || '').toLowerCase() === 'on');\n\n// ---- Night / Day logic (22:00–07:00) Europe/Vilnius ----\nvar tz = \"Europe/Vilnius\";\n\nvar parts = new Intl.DateTimeFormat('en-GB', {\n  timeZone: tz,\n  hour: '2-digit',\n  minute: '2-digit',\n  hour12: false\n}).formatToParts(new Date());\n\nvar hh = Number(parts.find(p => p.type === 'hour').value);\nvar mm = Number(parts.find(p => p.type === 'minute').value);\n\nvar minutes = hh * 60 + mm;\nvar isNight = (minutes >= 22 * 60 || minutes < 7 * 60);\n\n// ---- Optional test override ----\nvar force = flow.get('force_mode'); // \"night\" | \"day\" | null\nif (force === 'night') isNight = true;\nif (force === 'day') isNight = false;\n\nmsg.state.is_night = isNight;\nmsg.state.is_day = !isNight;\n\n// ---- LT timestamp ----\nmsg.state.now = new Intl.DateTimeFormat('sv-SE', {\n  timeZone: tz,\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit',\n  hour: '2-digit',\n  minute: '2-digit',\n  second: '2-digit',\n  hour12: false\n}).format(new Date()).replace(' ', 'T');\n\n// ---- STOP flags active? ----\nvar stopflagsRaw = msg.state.stopflags ? String(msg.state.stopflags) : '';\nvar stopflags = stopflagsRaw.trim().toLowerCase();\nvar stopActive =\n  stopflags &&\n  ['none', 'unknown', 'unavailable', ''].indexOf(stopflags) === -1;\n\n// ---- Node status ----\nvar statusParts = [];\n\nstatusParts.push(isNight ? \"NIGHT\" : \"DAY\");\n\nif (isNum(msg.state.co2))\n  statusParts.push(\"CO2 \" + Math.round(msg.state.co2));\n\nif (isNum(msg.state.outdoor))\n  statusParts.push(\"OUT \" + msg.state.outdoor.toFixed(1) + \"°\");\n\nif (isNum(msg.state.humidity))\n  statusParts.push(\"HUM \" + msg.state.humidity.toFixed(0) + \"%\");\n\nif (msg.state.windows_long_open)\n  statusParts.push(\"WIN_LONG\");\n\nif (stopActive)\n  statusParts.push(\"STOP!\");\n\nif (msg.state.alarm) {\n  var alarmText = \"AL:\" + msg.state.alarm;\n  if (msg.state._alarm_cached)\n    alarmText += \" (cached)\";\n  statusParts.push(alarmText);\n}\n\nstatusParts.push(\n  msg.state.recup_is_on ? \"RECUP ON\" : \"RECUP OFF\"\n);\n\nvar color =\n  stopActive ? \"red\" :\n    msg.state.windows_long_open ? \"yellow\" :\n      \"green\";\n\nnode.status({\n  fill: color,\n  shape: \"dot\",\n  text: statusParts.join(\" | \")\n});\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 410,
+        "y": 320,
+        "wires": [
+            [
+                "fn_decide",
+                "dbg_state"
+            ]
+        ]
+    },
+    {
+        "id": "dbg_state",
+        "type": "debug",
+        "z": "tab_komfovent_v3",
+        "name": "DEBUG state",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "state",
+        "targetType": "msg",
+        "x": 430,
+        "y": 260,
+        "wires": []
+    },
+    {
+        "id": "fn_decide",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Decide desired",
+        "func": "// Decide desired\n//\n// Reikalavimai iš flow:\n// - msg.state: { alarm, windows_long_open, co2, outdoor, humidity, stopflags, is_night, ... }\n// - co2 laiptai: <600=20, 600-749=30, 750-899=45, 900-1099=70, >=1100=100\n// - ARMED_AWAY boost: CO2>=800 vieną kartą (desired.armedBoost=true -> tavo trigger node užkurs 10 min OFF)\n//\n// Pastabos:\n// - STOP FLAGS = aukščiausias prioritetas (hard block)\n// - Vonios OVR: ON >80, OFF jei <70 išsilaiko 5 min\n// - windowsLong išjungia (nebent STOP FLAGS)\n// - day >18C: jungiam tik jei CO2>=800\n// - rate-based boost: pakelia fan, jei CO2 kyla greitai, su hold\n// - ✅ Rate-based boost išjungtas, jei CO2 < 600 (saugiklis single/low-CO2 režimui)\n\nvar s = msg.state || {};\nvar alarm = s.alarm ? String(s.alarm) : '';\nvar windowsLong = !!s.windows_long_open;\n\nvar co2 = s.co2;\nvar outdoor = s.outdoor;\nvar hum = s.humidity;\n\nvar isNight = !!s.is_night;\n\n// ==== Helperiai ====\nfunction isNum(v) { return v !== null && v !== undefined && isFinite(v); }\n\nfunction co2ToFan(v) {\n  if (!isNum(v)) return 30;\n  if (v < 600) return 20;\n  if (v < 750) return 30;\n  if (v < 900) return 45;\n  if (v < 1100) return 70;\n  return 100;\n}\n\n// ==== STOP FLAGS ====\nvar stopflagsRaw = s.stopflags ? String(s.stopflags) : '';\nvar stopflags = stopflagsRaw.trim().toLowerCase();\nvar stopActive = stopflags && ['none', 'unknown', 'unavailable', ''].indexOf(stopflags) === -1;\n\nvar lastStop = flow.get('last_stopflags') || '';\nflow.set('last_stopflags', stopflags);\n\n// ==== Default desired ====\nvar desired = { on: true, fan: 30, ovr: false, notify: null, armedBoost: false };\n\n// debug/meta\nvar reason = \"DEFAULT\";\nvar dbg = {};\n\n// ==== 1) STOP FLAGS (hard block) ====\nif (stopActive) {\n  desired.on = false;\n  desired.fan = null;\n  desired.ovr = false;\n  reason = \"STOPFLAGS\";\n\n  if (stopflags !== lastStop) {\n    desired.notify =\n      'Komfovent STOP FLAGS: ' + (stopflagsRaw || '') +\n      '. Išjungiu rekuperatorių ir stabdau automatiką.';\n  }\n} else {\n  // ==== 2) Vonios OVR hysteresis (ON >80, OFF <70 for 5 min) ====\n  const now = Date.now();\n  const ovrActive = !!flow.get('bath_ovr_active');\n  const offSince = flow.get('bath_ovr_off_since') || null;\n\n  if (isNum(hum)) {\n    if (hum > 80) {\n      flow.set('bath_ovr_active', true);\n      flow.set('bath_ovr_off_since', null);\n    }\n\n    if (ovrActive) {\n      if (hum < 70) {\n        if (!offSince) {\n          flow.set('bath_ovr_off_since', now);\n        } else if ((now - offSince) >= 5 * 60 * 1000) {\n          flow.set('bath_ovr_active', false);\n          flow.set('bath_ovr_off_since', null);\n        }\n      } else {\n        flow.set('bath_ovr_off_since', null);\n      }\n    }\n  }\n\n  const bathOvr = !!flow.get('bath_ovr_active');\n  dbg.bath_ovr_active = bathOvr;\n\n  // ==== 3) ARMED_AWAY speciali logika ====\n  if (alarm !== 'armed_away') {\n    flow.set('armed_boost_done', false);\n  }\n\n  if (alarm === 'armed_away') {\n    var boostDone = !!flow.get('armed_boost_done');\n    dbg.armed_boost_done = boostDone;\n\n    if (!boostDone && isNum(co2) && co2 >= 800) {\n      flow.set('armed_boost_done', true);\n      desired.on = true;\n      desired.fan = co2ToFan(co2);\n      desired.ovr = false;\n      desired.armedBoost = true;\n      reason = \"ARMED_AWAY_BOOST\";\n    } else {\n      desired.on = false;\n      desired.fan = null;\n      desired.ovr = false;\n      reason = \"ARMED_AWAY_OFF\";\n    }\n\n  } else if (bathOvr) {\n    desired.on = true;\n    desired.fan = 100;\n    desired.ovr = true;\n    reason = \"BATH_OVR\";\n\n  } else if (windowsLong) {\n    desired.on = false;\n    desired.fan = null;\n    desired.ovr = false;\n    reason = \"WINDOWS_LONG\";\n\n  } else {\n    // ==== 6) Night / Day pagrindinis režimas ====\n    if (isNight) {\n      desired.on = true;\n      desired.fan = 35;\n      if (isNum(co2)) desired.fan = Math.max(35, co2ToFan(co2));\n      reason = \"NIGHT\";\n    } else {\n      if (isNum(outdoor) && outdoor > 18) {\n        if (isNum(co2) && co2 >= 800) {\n          desired.on = true;\n          desired.fan = co2ToFan(co2);\n          reason = \"DAY_HOT_CO2_HIGH\";\n        } else {\n          desired.on = false;\n          desired.fan = null;\n          desired.ovr = false;\n          reason = \"DAY_HOT_OFF\";\n        }\n      } else {\n        desired.on = true;\n        desired.fan = co2ToFan(co2);\n        reason = \"DAY\";\n      }\n    }\n  }\n\n  // ==== 7) Rate-based boost (CO2 kilimo greitis) ====\n  if (\n    desired.on === true &&\n    isNum(desired.fan) &&\n    alarm !== 'armed_away' &&\n    desired.ovr !== true\n  ) {\n    const nowTs = Date.now();\n    const co2now = isNum(co2) ? Number(co2) : null;\n\n    const RATE_MAX_AGE_MS = 15 * 60 * 1000;\n    const RATE_DEADBAND = 2;     // ppm/min\n    const BOOST_HOLD_MIN = 10;   // min\n    const BOOST_MAX_FAN = 80;\n\n    const prev = flow.get('co2_prev') || null;\n    let rate = null; // ppm/min\n\n    if (co2now !== null && prev && isNum(prev.value) && isNum(prev.ts)) {\n      const ageMs = nowTs - prev.ts;\n      const dtMin = ageMs / 60000;\n      if (ageMs > 0 && ageMs <= RATE_MAX_AGE_MS && dtMin > 0) {\n        rate = (co2now - prev.value) / dtMin;\n      }\n    }\n\n    if (co2now !== null) flow.set('co2_prev', { value: co2now, ts: nowTs });\n\n    if (rate !== null && Math.abs(rate) < RATE_DEADBAND) rate = 0;\n\n    let boostFan = null;\n\n    // ✅ Saugiklis: boost leidžiamas tik jei CO2 >= 600\n    if (rate !== null && isNum(co2) && co2 >= 600) {\n      if (rate >= 30) boostFan = 80;\n      else if (rate >= 18) boostFan = 65;\n      else if (rate >= 10) boostFan = 55;\n    }\n\n    const holdUntil = flow.get('rate_boost_hold_until') || 0;\n\n    if (boostFan !== null) {\n      flow.set('rate_boost_hold_until', nowTs + BOOST_HOLD_MIN * 60 * 1000);\n      flow.set('rate_boost_last_fan', boostFan);\n    } else if (nowTs < holdUntil) {\n      boostFan = flow.get('rate_boost_last_fan') || null;\n    } else {\n      flow.set('rate_boost_last_fan', null);\n    }\n\n    if (boostFan !== null) {\n      const before = desired.fan;\n      desired.fan = Math.max(desired.fan, Math.min(BOOST_MAX_FAN, boostFan));\n      if (desired.fan !== before) {\n        reason = reason + \"+RATE_BOOST\";\n      }\n    }\n\n    msg._rate = rate;\n    msg._rate_boostFan = boostFan;\n  }\n}\n\n// ==== Normalize ====\nif (desired.on === false) {\n  desired.fan = null;\n  desired.ovr = false;\n  desired.armedBoost = false;\n}\n\n// ==== Attach ====\nmsg.desired = desired;\nmsg.reason = reason;\nmsg.debug = dbg;\n\n// timestamps (patogu debug / log)\nmsg.desired_ts = Date.now();\nmsg.desired_at = new Date(msg.desired_ts).toISOString();\n\n// ==== Node status (po node) ====\nvar parts = [];\nparts.push(reason);\n\nparts.push((desired.on ? \"ON\" : \"OFF\") + (desired.ovr ? \" OVR\" : \"\"));\nif (isNum(desired.fan)) parts.push(\"FAN \" + desired.fan);\n\nif (isNum(co2)) parts.push(\"CO2 \" + Math.round(co2));\nif (isNum(outdoor)) parts.push(\"OUT \" + outdoor.toFixed(1));\nif (isNum(hum)) parts.push(\"HUM \" + hum.toFixed(1));\n\nif (windowsLong) parts.push(\"WIN_LONG\");\nif (alarm) parts.push(\"AL:\" + alarm);\n\nvar fill = \"green\";\nif (stopActive) fill = \"red\";\nelse if (desired.ovr) fill = \"blue\";\nelse if (alarm === \"armed_away\") fill = \"orange\";\nelse if (windowsLong) fill = \"yellow\";\n\nnode.status({ fill, shape: \"dot\", text: parts.join(\" | \") });\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 540,
+        "y": 380,
+        "wires": [
+            [
+                "dbg_desired",
+                "9e7c1a909df097e4",
+                "fn_branch_boost"
+            ]
+        ]
+    },
+    {
+        "id": "dbg_desired",
+        "type": "debug",
+        "z": "tab_komfovent_v3",
+        "name": "DEBUG desired",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "desired",
+        "targetType": "msg",
+        "x": 640,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "fn_branch_boost",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Branch: armedBoost",
+        "func": "var d = msg.desired || {};\nif (d.armedBoost){\n  return [msg, {topic:'armed_boost_start'}];\n}\nreturn [msg, null];",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 900,
+        "y": 280,
+        "wires": [
+            [
+                "fn_key_rbe"
+            ],
+            [
+                "tr_boost_10m"
+            ]
+        ]
+    },
+    {
+        "id": "tr_boost_10m",
+        "type": "trigger",
+        "z": "tab_komfovent_v3",
+        "name": "ARMED boost 10 min -> OFF",
+        "op1": "",
+        "op2": "stop",
+        "op1type": "nul",
+        "op2type": "str",
+        "duration": "10",
+        "extend": false,
+        "overrideDelay": true,
+        "units": "min",
+        "reset": "",
+        "bytopic": "all",
+        "topic": "topic",
+        "outputs": 1,
+        "x": 1200,
+        "y": 360,
+        "wires": [
+            [
+                "fn_boost_end"
+            ]
+        ]
+    },
+    {
+        "id": "fn_boost_end",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Boost end -> force OFF cmd",
+        "func": "msg.desired = {on:false, fan:null, ovr:false, notify:null, armedBoost:false};\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1480,
+        "y": 360,
+        "wires": [
+            [
+                "fn_key_rbe"
+            ]
+        ]
+    },
+    {
+        "id": "fn_key_rbe",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Normalize + desired_key",
+        "func": "const d = msg.desired || {};\nconst s = msg.state || {};\n\nif (d.on === false) {\n    d.fan = null;\n    d.ovr = false;\n}\n\n// <-- šitas svarbiausias\nconst recup_is_on = !!s.recup_is_on;\n\nmsg.desired_key = JSON.stringify({\n    on: !!d.on,\n    fan: (d.fan === null || d.fan === undefined) ? null : Math.round(d.fan),\n    ovr: !!d.ovr,\n    autostart_delay: !!d.autostart_delay,\n    notify: d.notify ? \"1\" : \"0\",\n\n    // pridedam realią būseną, kad disarm priverstinai “atsimuštų”\n    recup_is_on: recup_is_on\n});\n\nmsg.desired = d;\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1130,
+        "y": 260,
+        "wires": [
+            [
+                "rbe_desired",
+                "0946041b20c2f61f"
+            ]
+        ]
+    },
+    {
+        "id": "rbe_desired",
+        "type": "rbe",
+        "z": "tab_komfovent_v3",
+        "name": "Tik kai pasikeičia desired",
+        "func": "rbe",
+        "gap": "",
+        "start": "",
+        "inout": "out",
+        "septopics": false,
+        "property": "desired_key",
+        "topi": "topic",
+        "x": 1370,
+        "y": 260,
+        "wires": [
+            [
+                "fn_build_actions"
+            ]
+        ]
+    },
+    {
+        "id": "fn_build_actions",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Build actions (payload=array)",
+        "func": "var d = msg.desired || {};\nvar ENT = {\n  start_stop: 'switch.start_stop',\n  intake: 'number.intake_level_1',\n  exhaust: 'number.exhaust_level_1',\n  ovr_relay: 'switch.recup_switch_relay',\n  notify: 'notify.mobile_app_g_iphone'\n};\n\nvar actions = [];\n\n// start/stop\nif (d.on === true) actions.push({kind:'switch_on', entity_id: ENT.start_stop});\nelse actions.push({kind:'switch_off', entity_id: ENT.start_stop});\n\n// fan\nif (d.on === true && d.fan !== null && d.fan !== undefined){\n  var v = Math.max(20, Math.min(100, Math.round(d.fan)));\n  actions.push({kind:'set_number', entity_id: ENT.intake, value: v});\n  actions.push({kind:'set_number', entity_id: ENT.exhaust, value: v});\n}\n\n// ovr relay\nif (d.ovr === true) actions.push({kind:'switch_on', entity_id: ENT.ovr_relay});\nelse actions.push({kind:'switch_off', entity_id: ENT.ovr_relay});\n\n// notify\nif (d.notify){\n  actions.push({kind:'notify', service: ENT.notify, title:'Komfovent', message: d.notify});\n}\n\nmsg.payload = actions;\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1620,
+        "y": 260,
+        "wires": [
+            [
+                "dbg_actions",
+                "split_actions"
+            ]
+        ]
+    },
+    {
+        "id": "dbg_actions",
+        "type": "debug",
+        "z": "tab_komfovent_v3",
+        "name": "DEBUG actions (array)",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "x": 1620,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "split_actions",
+        "type": "split",
+        "z": "tab_komfovent_v3",
+        "name": "Split actions",
+        "splt": "\\n",
+        "spltType": "str",
+        "arraySplt": 1,
+        "arraySpltType": "len",
+        "stream": false,
+        "addname": "idx",
+        "property": "payload",
+        "x": 1710,
+        "y": 320,
+        "wires": [
+            [
+                "sw_kind"
+            ]
+        ]
+    },
+    {
+        "id": "sw_kind",
+        "type": "switch",
+        "z": "tab_komfovent_v3",
+        "name": "Route by kind",
+        "property": "payload.kind",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "switch_on",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "switch_off",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "set_number",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "notify",
+                "vt": "str"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 4,
+        "x": 1900,
+        "y": 320,
+        "wires": [
+            [
+                "fn_prep_sw_on"
+            ],
+            [
+                "fn_prep_sw_off"
+            ],
+            [
+                "fn_prep_num"
+            ],
+            [
+                "fn_prep_notify"
+            ]
+        ]
+    },
+    {
+        "id": "fn_prep_sw_on",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Prep switch.turn_on",
+        "func": "var a = msg.payload;\nif (!a || !a.entity_id) return null;\nmsg.payload = { entity_id: a.entity_id };\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2100,
+        "y": 200,
+        "wires": [
+            [
+                "ha_sw_on"
+            ]
+        ]
+    },
+    {
+        "id": "fn_prep_sw_off",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Prep switch.turn_off",
+        "func": "var a = msg.payload;\nif (!a || !a.entity_id) return null;\nmsg.payload = { entity_id: a.entity_id };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "x": 2100,
+        "y": 260,
+        "wires": [
+            [
+                "ha_sw_off"
+            ]
+        ]
+    },
+    {
+        "id": "fn_prep_num",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Prep number.set_value",
+        "func": "var a = msg.payload;\nif (!a || !a.entity_id) return null;\nmsg.payload = { entity_id: a.entity_id, value: Number(a.value) };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "x": 2100,
+        "y": 320,
+        "wires": [
+            [
+                "ha_num_set"
+            ]
+        ]
+    },
+    {
+        "id": "fn_prep_notify",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Prep notify",
+        "func": "var a = msg.payload;\nif (!a) return null;\nmsg.payload = { title: a.title || 'Komfovent', message: a.message || String(a) };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "x": 2070,
+        "y": 380,
+        "wires": [
+            [
+                "ha_notify"
+            ]
+        ]
+    },
+    {
+        "id": "ha_sw_on",
+        "type": "api-call-service",
+        "z": "tab_komfovent_v3",
+        "name": "HA switch.turn_on",
+        "server": "de0e06cd.8456e8",
+        "version": 7,
+        "debugenabled": true,
+        "action": "switch.turn_on",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"entity_id\":\"{{payload.entity_id}}\"}",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": true,
+        "domain": "switch",
+        "service": "turn_on",
+        "x": 2310,
+        "y": 200,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "ha_sw_off",
+        "type": "api-call-service",
+        "z": "tab_komfovent_v3",
+        "name": "HA switch.turn_off",
+        "server": "de0e06cd.8456e8",
+        "version": 7,
+        "debugenabled": true,
+        "action": "switch.turn_off",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"entity_id\":\"{{payload.entity_id}}\"}",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": true,
+        "domain": "switch",
+        "service": "turn_off",
+        "x": 2310,
+        "y": 260,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "ha_num_set",
+        "type": "api-call-service",
+        "z": "tab_komfovent_v3",
+        "name": "HA number.set_value",
+        "server": "de0e06cd.8456e8",
+        "version": 7,
+        "debugenabled": true,
+        "action": "number.set_value",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{     \"entity_id\": \"{{payload.entity_id}}\",     \"value\": {{payload.value}} }",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": true,
+        "domain": "number",
+        "service": "set_value",
+        "x": 2320,
+        "y": 320,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "ha_notify",
+        "type": "api-call-service",
+        "z": "tab_komfovent_v3",
+        "name": "HA notify.mobile_app_g_iphone",
+        "server": "de0e06cd.8456e8",
+        "version": 7,
+        "debugenabled": true,
+        "action": "notify.mobile_app_g_iphone",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"title\":\"{{payload.title}}\",\"message\":\"{{payload.message}}\"}",
+        "dataType": "json",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "notify",
+        "service": "mobile_app_g_iphone",
+        "x": 2330,
+        "y": 380,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "0946041b20c2f61f",
+        "type": "debug",
+        "z": "tab_komfovent_v3",
+        "name": "Normalize + desired_key",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "true",
+        "targetType": "full",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1110,
+        "y": 200,
+        "wires": []
+    },
+    {
+        "id": "9e7c1a909df097e4",
+        "type": "function",
+        "z": "tab_komfovent_v3",
+        "name": "Rate telemetry",
+        "func": "// ===== Rate telemetry — FINAL v3.2.2 =====\n// Tikslai:\n// 1) Kaupia rate istoriją į flow.rate_log (kalibravimui)\n// 2) Maitina HA entity per 3 HA nodes:\n//    - sensor.current_co2_rate (ppm/min)  [OUT1]\n//    - binary_sensor.rate_boost_active   [OUT2]\n//    - sensor.komfovent_logic_mode       [OUT4]\n// Pastaba: entity sukūrimas vyksta HA \"sensor\"/\"binary_sensor\" node'uose, ne čia.\n\n// ---------- helpers ----------\nfunction isNum(v) {\n    return v !== null && v !== undefined && isFinite(v);\n}\nfunction normStr(v) {\n    if (v === null || v === undefined) return \"\";\n    return String(v).trim();\n}\nfunction isStopActive(stopflagsRaw) {\n    const s = normStr(stopflagsRaw).toLowerCase();\n    return s !== \"\" && s !== \"none\" && s !== \"unknown\" && s !== \"unavailable\";\n}\n\n// ---------- inputs ----------\nconst rate = msg._rate;              // ppm/min (gali būti null)\nconst boostFan = msg._rate_boostFan; // null arba skaičius\n\nconst s = msg.state || {};\nconst d = msg.desired || {};\n\n// ---------- LOGIC MODE (CODE) ----------\nlet modeCode = \"UNKNOWN\";\n\nif (isStopActive(s.stopflags)) {\n    modeCode = \"STOP\";\n} else if (d.ovr === true) {\n    modeCode = \"OVR\";               // trumpas kodas vietoj BATH_OVR\n} else if (s.alarm === \"armed_away\") {\n    modeCode = \"ARMED_AWAY\";\n} else if (s.windows_long_open === true) {\n    modeCode = \"WINDOWS\";\n} else if (s.is_night === true) {\n    modeCode = \"NIGHT\";\n} else {\n    modeCode = \"DAY\";\n}\n\n// jei šiuo ciklu yra rate-boost (boostFan skaičius) — rodom kaip atskirą režimą\nif (isNum(boostFan)) {\n    modeCode = \"RATE_BOOST\";\n}\n\n// ---------- LT LABELS (HA display text) ----------\nconst LT = {\n    STOP: \"STOP\",\n    OVR: \"OVR\",\n    ARMED_AWAY: \"Išvykę\",\n    WINDOWS: \"Langai\",\n    NIGHT: \"Naktis\",\n    DAY: \"Diena\",\n    RATE_BOOST: \"CO₂ kilimas\",\n    UNKNOWN: \"Laukiama\"\n};\nconst modeLt = LT[modeCode] || modeCode;\n\n// ---------- TELEMETRY LOG (for calibration) ----------\n// Log'inam tik kai rate tikrai paskaičiuotas\nif (isNum(rate)) {\n    const entry = {\n        ts: Date.now(),\n        rate_ppm_min: Number(rate),\n        boost_fan: isNum(boostFan) ? Number(boostFan) : null,\n        co2: isNum(s.co2) ? Number(s.co2) : null,\n        outdoor: isNum(s.outdoor) ? Number(s.outdoor) : null,\n        humidity: isNum(s.humidity) ? Number(s.humidity) : null,\n        desired_on: d.on === true,\n        desired_fan: isNum(d.fan) ? Number(d.fan) : null,\n        desired_ovr: d.ovr === true,\n        windows_long_open: s.windows_long_open === true,\n        alarm: s.alarm ? String(s.alarm) : \"\",\n        logic_mode: modeCode\n    };\n\n    let log = flow.get(\"rate_log\") || [];\n    if (!Array.isArray(log)) log = [];\n    log.push(entry);\n\n    // Retention: ~14 dienų (jei Decide ~ kas 10 min)\n    const MAX_POINTS = 2200;\n    while (log.length > MAX_POINTS) log.shift();\n\n    flow.set(\"rate_log\", log);\n\n    // patogu debug\n    msg._rate_telemetry = { points: log.length, last: entry };\n}\n\n// ---------- OUTPUT MESSAGES ----------\n// OUT1: CO2 rate sensor (ppm/min)\n// ✅ jei nėra rate -> return null, kad HA negaus \"0\" ir nebus šiukšlių grafike\nlet out1 = null;\nif (isNum(rate)) {\n    out1 = {\n        payload: Number(rate.toFixed(2)),\n        attributes: {\n            unit: \"ppm/min\",\n            co2: isNum(s.co2) ? Number(s.co2) : null,\n            boost_fan: isNum(boostFan) ? Number(boostFan) : null\n        }\n    };\n}\n\n// OUT2: Rate boost active (binary)\nconst out2 = {\n    payload: isNum(boostFan)\n};\n\n// OUT3: free/debug (nenaudojam)\nconst out3 = null;\n\n// OUT4: Logic mode sensor (LT label + attributes su kodu/kontekstu)\nconst out4 = {\n    payload: modeLt,\n    attributes: {\n        mode_code: modeCode,\n        rate_ppm_min: isNum(rate) ? Number(rate.toFixed(2)) : null,\n        boost_fan: isNum(boostFan) ? Number(boostFan) : null,\n        co2: isNum(s.co2) ? Number(s.co2) : null,\n        is_night: s.is_night === true,\n        windows_long_open: s.windows_long_open === true,\n        alarm: s.alarm ? String(s.alarm) : \"\",\n        ovr: d.ovr === true\n    }\n};\n\n// ---------- Node status ----------\nnode.status({\n    fill: isNum(boostFan) ? \"red\" : \"blue\",\n    shape: \"dot\",\n    text: `${modeLt} | rate ${isNum(rate) ? rate.toFixed(1) : \"-\"} ppm/min`\n});\n\nreturn [out1, out2, out3, out4];",
+        "outputs": 4,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 720,
+        "y": 460,
+        "wires": [
+            [
+                "4a840d16f0922d31"
+            ],
+            [
+                "9eb8acb5dc76093c"
+            ],
+            [],
+            [
+                "2b4a3b9977e7753f"
+            ]
+        ]
+    },
+    {
+        "id": "4a840d16f0922d31",
+        "type": "ha-sensor",
+        "z": "tab_komfovent_v3",
+        "name": "CO₂ kilimo greitis (ppm/min)",
+        "entityConfig": "363e53ee1a5e93c8",
+        "version": 0,
+        "state": "payload",
+        "stateType": "msg",
+        "attributes": [],
+        "inputOverride": "allow",
+        "outputProperties": [],
+        "x": 960,
+        "y": 400,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "9eb8acb5dc76093c",
+        "type": "ha-binary-sensor",
+        "z": "tab_komfovent_v3",
+        "name": "Rate boost",
+        "entityConfig": "3b5e0986a9a78ab2",
+        "version": 0,
+        "state": "payload",
+        "stateType": "msg",
+        "attributes": [],
+        "inputOverride": "allow",
+        "outputProperties": [],
+        "x": 910,
+        "y": 460,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "2b4a3b9977e7753f",
+        "type": "ha-sensor",
+        "z": "tab_komfovent_v3",
+        "name": "Logikos režimas (CO2 / RATE / NIGHT / OVR ir t.t.)",
+        "entityConfig": "70d2fa06b2a23feb",
+        "version": 0,
+        "state": "payload",
+        "stateType": "msg",
+        "attributes": [],
+        "inputOverride": "allow",
+        "outputProperties": [],
+        "x": 1030,
+        "y": 520,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "de0e06cd.8456e8",
+        "type": "server",
+        "name": "Home Assistant",
+        "version": 6,
+        "addon": false,
+        "rejectUnauthorizedCerts": false,
+        "ha_boolean": [
+            "y",
+            "yes",
+            "true",
+            "on",
+            "home",
+            "open"
+        ],
+        "connectionDelay": true,
+        "cacheJson": true,
+        "heartbeat": false,
+        "heartbeatInterval": "30",
+        "areaSelector": "friendlyName",
+        "deviceSelector": "friendlyName",
+        "entitySelector": "friendlyName",
+        "statusSeparator": "at: ",
+        "statusYear": "hidden",
+        "statusMonth": "short",
+        "statusDay": "numeric",
+        "statusHourCycle": "h23",
+        "statusTimeFormat": "h:m",
+        "enableGlobalContextStore": true
+    },
+    {
+        "id": "363e53ee1a5e93c8",
+        "type": "ha-entity-config",
+        "server": "de0e06cd.8456e8",
+        "deviceConfig": "",
+        "name": "CO₂ kilimo greitis (ppm/min)",
+        "version": 6,
+        "entityType": "sensor",
+        "haConfig": [
+            {
+                "property": "name",
+                "value": "CO₂ kilimo greitis (ppm/min)"
+            },
+            {
+                "property": "icon",
+                "value": ""
+            },
+            {
+                "property": "entity_picture",
+                "value": ""
+            },
+            {
+                "property": "entity_category",
+                "value": ""
+            },
+            {
+                "property": "device_class",
+                "value": ""
+            },
+            {
+                "property": "unit_of_measurement",
+                "value": "ppm/min"
+            },
+            {
+                "property": "state_class",
+                "value": "measurement"
+            }
+        ],
+        "resend": false,
+        "debugEnabled": false
+    },
+    {
+        "id": "3b5e0986a9a78ab2",
+        "type": "ha-entity-config",
+        "server": "de0e06cd.8456e8",
+        "deviceConfig": "",
+        "name": "Rate boost",
+        "version": 6,
+        "entityType": "binary_sensor",
+        "haConfig": [
+            {
+                "property": "name",
+                "value": "Rate boost"
+            },
+            {
+                "property": "icon",
+                "value": ""
+            },
+            {
+                "property": "entity_picture",
+                "value": ""
+            },
+            {
+                "property": "entity_category",
+                "value": ""
+            },
+            {
+                "property": "device_class",
+                "value": "power"
+            }
+        ],
+        "resend": false,
+        "debugEnabled": false
+    },
+    {
+        "id": "70d2fa06b2a23feb",
+        "type": "ha-entity-config",
+        "server": "de0e06cd.8456e8",
+        "deviceConfig": "",
+        "name": "Komfovent logic",
+        "version": 6,
+        "entityType": "sensor",
+        "haConfig": [
+            {
+                "property": "name",
+                "value": "Komfovent logic"
+            },
+            {
+                "property": "icon",
+                "value": ""
+            },
+            {
+                "property": "entity_picture",
+                "value": ""
+            },
+            {
+                "property": "entity_category",
+                "value": ""
+            },
+            {
+                "property": "device_class",
+                "value": ""
+            },
+            {
+                "property": "unit_of_measurement",
+                "value": ""
+            },
+            {
+                "property": "state_class",
+                "value": ""
+            }
+        ],
+        "resend": false,
+        "debugEnabled": false
+    },
+    {
+        "id": "1283965f21950e42",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-home-assistant-websocket": "0.80.3"
+        }
+    }
+]
