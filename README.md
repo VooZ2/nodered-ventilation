@@ -131,6 +131,31 @@ Vidinė atmintis saugo iki 14 dienų istoriją kalibravimui.
 
 ------------------------------------------------------------------------
 
+# TODO (Planuojami patobulinimai)
+
+## Rate-based boost optimizacija (Netatmo 5 min atnaujinimai)
+
+- Skaičiuoti kilimo greitį naudojant 10–15 min slankų langą vietoje vieno intervalo
+- Alternatyva: reikalauti 2 iš eilės rate ≥ slenksčio patvirtinimų
+- Koreguoti rate slenksčius pagal 5 min sensoriaus granuliaciją
+
+## Learning threshold ir rate-boost susiejimas
+
+- Rate boost aktyvavimo ribą sieti su auto_co2_on_threshold
+- Pvz.: boost leidžiamas tik jei CO₂ ≥ threshold arba (threshold - 50)
+
+## Rate boost stabilizavimas
+
+- Įvesti cooldown 15–20 min tarp boost aktyvacijų
+- Soft-hold mechanizmas (nutraukti boost jei CO₂ krenta)
+
+## Telemetrijos analizė
+
+- Atlikti rate_log analizę ir nustatyti realius namų CO₂ kilimo profilius
+- Įvertinti realų boost įsijungimų dažnumą per parą
+
+------------------------------------------------------------------------
+
 # 🔢 Versija
 
 **v4.0.0**
