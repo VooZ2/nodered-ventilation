@@ -6,9 +6,72 @@ Versijos numeruojamos pagal Semantic Versioning principą:
 
 MAJOR.MINOR.PATCH
 
-- MAJOR – architektūriniai ar esminiai logikos pakeitimai
-- MINOR – naujos funkcijos
-- PATCH – klaidų taisymai ir smulkūs patobulinimai
+- MAJOR – architektūriniai ar esminiai logikos pakeitimai  
+- MINOR – naujos funkcijos  
+- PATCH – klaidų taisymai ir smulkūs patobulinimai  
+
+---
+
+## [4.1.0] - 2026-02-13
+
+Rate Boost stabilizacija, signalizacijos integracija į mokymąsi ir filtrų nusidėvėjimo modelis.
+
+---
+
+### Pridėta
+
+#### Stabilizuotas Rate-Based Boost (v4.1)
+
+- 15 min slankus CO₂ kilimo langas
+- 2 iš eilės patvirtinimai prieš startą
+- Cooldown mechanizmas tarp boost aktyvacijų (20 min)
+- Soft-hold nutraukimas, jei CO₂ krenta sparčiau nei -3 ppm/min
+- Boost leidžiamas tik jei CO₂ ≥ (autoThreshold - 50)
+- Minimalus `boost_log` (vidinis 24h žurnalas)
+
+---
+
+#### Alarm-aware Learning
+
+- CO₂ log įrašuose saugoma signalizacijos būsena
+- Adaptacijai naudojami tik įrašai, kai:
+  - `alarm === "disarmed"`
+- Pridėtas `ALARM_BLOCK` indikatorius node status’e
+- Mokymasis nebevyksta iš tuščių namų duomenų
+
+---
+
+### Pakeista
+
+- Rate logika perkelta į stabilų deterministinį modelį
+- Boost nebeaktyvuojamas dėl trumpalaikių 5 min šuolių
+- Learning apsaugos išplėstos (Alarm-aware filtravimas)
+- Node komentarai atnaujinti (v4.1 dokumentacija)
+- Telemetrija nebeužteršiama klaidingais „0“ rate duomenimis
+
+---
+
+### Architektūra
+
+Sistema suskirstyta į aiškius modulius:
+
+- Control Flow (Decide Desired)
+- Learning Flow (CO₂ threshold adaptacija)
+- Boost stabilizacija
+- Filtrų modelis
+- Telemetrija
+
+Visi moduliai veikia nepriklausomai, bet dalijasi `flow` kintamaisiais.
+
+---
+
+### Patikimumo patobulinimai
+
+- Apsauga nuo klaidingo mokymosi tuščiuose namuose
+- Boost stabilizacija prieš Netatmo 5 min atnaujinimo efektą
+- 03:00 LT profilio klaidos eliminavimas
+- Soft-stop mechanizmas boost režime
+- Vidinė 14 dienų CO₂ istorija kalibravimui
 
 ---
 
@@ -21,86 +84,32 @@ Pagrindinis leidimas – sujungta rekuperatoriaus valdymo logika ir adaptyvus CO
 Adaptyvus CO₂ mokymosi modulis:
 - Automatinis kasdienis įsijungimo slenksčio perskaičiavimas
 - Profilinė analizė:
-  - Darbo dienomis – analizuojami tik nustatyti aktyvūs laikotarpiai
-  - Savaitgaliais – visa 24 val. paros juosta
-- Proporcinė adaptacija:
-  - delta = -round((avgRate - targetRate) * K)
-  - Dienos pokytis ribojamas iki ±25 ppm
+  - Darbo dienomis – aktyvūs laikotarpiai
+  - Savaitgaliais – 24h analizė
+- Proporcinė adaptacija (K=0.2)
+- Dienos pokytis ribojamas ±25 ppm
 - Slenksčio ribos: 550–950 ppm
 
-Mokymosi apsaugos (Learning Guards):
-- Stability Lock:
-  - Mokymasis nevykdomas jei:
-    - max CO₂ < 650 ppm
-    - paros svyravimas < 100 ppm
-- Gap Guard:
-  - Mokymasis blokuojamas jei prarasta daugiau nei 35% tikėtinų duomenų taškų
+Learning Guards:
+- Stability Lock
+- Gap Guard
 
-CO₂ kilimo greičio režimas (Rate-Based Boost):
-- Reaguoja į CO₂ kilimo tempą (ppm/min)
-- Lygiai:
-  - ≥10 → 55%
-  - ≥18 → 65%
-  - ≥30 → 80%
-- 10 minučių išlaikymo mechanizmas
-- Boost neaktyvuojamas jei CO₂ < 600 ppm
-
-Alarm fallback mechanizmas:
-- Po Home Assistant persikrovimo naudojama paskutinė žinoma signalizacijos būsena
-- Apsaugo nuo netikėto sistemos įsijungimo
-
-Langų saugiklis:
-- Jei langai atidaryti ilgiau nei 10 min – sistema išjungiama
-- Automatinis atstatymas uždarius langus
+Rate-Based Boost (ankstesnė versija):
+- CO₂ kilimo analizė (ppm/min)
+- 10 min hold mechanizmas
 
 Vonios OVR su histereze:
-- Įjungimas >80% drėgmės
-- Išjungimas tik jei <70% išsilaiko 5 min
+- >80% įjungimas
+- <70% + 5 min išjungimas
 
-STOP FLAGS blokavimas:
-- Kritinės būsenos atveju sistema nedelsiant stabdoma
-- Generuojamas pranešimas apie būsenos pasikeitimą
+STOP FLAGS:
+- Kritinis blokavimas
 
-Telemetrija:
-- sensor.current_co2_rate
-- binary_sensor.rate_boost_active
-- sensor.komfovent_logic_mode
-- Vidinė ~14 dienų istorija kalibravimui
+Windows Guard:
+- >10 min atviri langai → išjungimas
 
-### Pakeista
-
-- Mokymosi slenkstis integruotas į pagrindinę valdymo logiką
-- Standartizuota node pavadinimų struktūra (angliški pavadinimai)
-- Node komentarai palikti tik lietuvių kalba
-- Patobulintas desired_key generavimas (įtrauktas recup_is_on)
-- Rate telemetrija neberašo dirbtinių „0“ reikšmių
-
-### Architektūra
-
-- Atskirtas:
-  - Valdymo srautas (Control Flow)
-  - Mokymosi srautas (Learning Flow)
-- RBE filtras prieš komandų vykdymą
-- Veiksmų maršrutizavimas pagal „kind“
-- Moduliniai komandų paruošimo mazgai
-
-### Patikimumo patobulinimai
-
-- HA persikrovimo apsauga
-- Alternatyvūs HA būsenų skaitymo keliai
-- Ištaisyta 03:00 LT profilio logikos klaida
-- Apsauga nuo savaitgalio/darbo dienos neatitikimo
-
----
-
-## [3.2.2]
-
-### Pataisyta
-
-- Teisingas CO₂ entity mapping
-- Sutvarkytas recup_is_on laukas
-- Ištaisyta rate telemetrija (neberašo 0)
-- Suderintas schedule pavadinimas ir crontab
+Alarm fallback mechanizmas:
+- Paskutinės žinomos būsenos naudojimas po HA restart
 
 ---
 
