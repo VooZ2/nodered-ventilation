@@ -12,6 +12,52 @@ MAJOR.MINOR.PATCH
 
 ---
 
+## [4.1.1] - 2026-02-13
+
+### 🐛 Bugfix
+
+**Rate telemetry stabilumo pataisymas**
+
+- Išspręsta problema, kai `sensor.co2_kilimo_greitis_ppm_min` Home Assistant rodydavo `unknown`
+- Užtikrinta, kad sensorius visada turi reikšmę:
+  - Jei yra naujas rate → siunčiama aktuali reikšmė
+  - Jei nėra → naudojama paskutinė žinoma
+  - Jei duomenys per seni → automatiškai nustatoma 0
+- Pašalinti grafiko „unknown“ tarpai
+
+---
+
+### ⚙ Patobulinimai
+
+**CO₂ kilimo greičio stabilizavimas**
+
+- Įdiegtas minimalus ΔCO₂ filtras (10 ppm), kad būtų ignoruojamas smulkus triukšmas
+- Įdiegtas EMA smoothing (α = 0.35) lygesnei kreivei
+- Pridėta kokybės klasifikacija:
+  - `ok`
+  - `stable`
+  - `gap`
+  - `no_co2`
+  - `stale_timeout`
+
+**Papildomi atributai telemetrijoje**
+
+- `raw_rate`
+- `ema_rate`
+- `quality`
+- `stable`
+- `delta_co2`
+- `delta_min`
+
+---
+
+### 🔄 Elgsenos pakeitimai
+
+- Maži CO₂ svyravimai dabar laikomi „stabilu“, vietoj dirbtinių šuolių grafike
+- Po ilgesnio laikotarpio be atnaujinimų rate automatiškai nustatomas į 0 (apsauga nuo pakibusios reikšmės)
+
+---
+
 ## [4.1.0] - 2026-02-13
 
 Rate Boost stabilizacija, signalizacijos integracija į mokymąsi ir filtrų nusidėvėjimo modelis.
