@@ -12,6 +12,51 @@ MAJOR.MINOR.PATCH
 
 ---
 
+## [4.2.0] - 2026-02-14
+
+### Logging ir telemetrijos stabilizavimo versija
+
+Ši versija orientuota į telemetrijos nuoseklumą, duomenų schemos stabilizavimą ir pasirengimą predikcinei analitikai.
+
+---
+
+### Pridėta
+
+- `mode` laukas telemetrijoje dabar imamas iš `sensor.komfovent_logic_2`
+- Fallback mechanizmas alarm būsenai (naudojama paskutinė žinoma reikšmė)
+- `rate` reikšmės fallback į vidinį 15 min slankaus lango skaičiavimą
+- Telemetrijos schemos suvienodinimas ilgalaikiam duomenų kaupimui
+- Stabilizuotas `boost_active` šaltinis (tik iš HA binary sensor)
+
+---
+
+### Pakeista
+
+- `mode` nebėra hardcodintas kaip `"TELEMETRY"`
+- `rate` laukas:
+  - Naudoja HA sensorių, jei prieinamas
+  - Jei neprieinamas – skaičiuojamas iš slankaus lango
+- `boost_active` logikoje pilnai suvienodintas (nebenaudojamas flow context kaip alternatyvus šaltinis)
+- Telemetrijos įrašai garantuotai neturi `null` tarpų `rate` lauke
+
+---
+
+### Sutvarkyta
+
+- Pašalinti epizodiniai `rate: null` įrašai
+- Išvengta skirtingų `boost_active` interpretacijų (HA vs flow)
+- Pagerintas telemetrijos stabilumas po restart arba HA uždelsimo
+
+---
+
+### Vidiniai pakeitimai
+
+- Logging modulis paruoštas predikcinei analitikai
+- Stabilizuota telemetrijos schema prieš ilgalaikio dataset kaupimą
+- Nustatyta nauja bazinė versija švariems duomenims rinkti nuo 2026-02-14
+
+---
+
 ## [4.1.1] - 2026-02-13
 
 ### 🐛 Bugfix
