@@ -1,25 +1,136 @@
 [
     {
-        "id": "d6a3a2540af1da95",
+        "id": "26a876f07cb669b2",
         "type": "tab",
-        "label": "Komfovent – Module: Filters",
+        "label": "Komfovent - Module: Filters",
         "disabled": false,
-        "info": "Filtrų nusidėvėjimo modulis (atskiras flow).\n\nLogika:\n- Skaičiuoja „efektyvias valandas“ pagal fan % (20–100%).\n- Keitimo kriterijus: 2000 efektyvių val. ARBA 6 mėn – kas sueina greičiau.\n- Remaining% = min(remaining pagal val., remaining pagal laiką).\n- 3 pranešimai: 10%, 5%, 0% (tik po vieną per ciklą).\n- Reset per telefono notification action (FILTER_RESET) arba per mygtuką flow.\n\nLogging:\n- Context cache: ~10 dienų (ribojamas įrašų skaičius)\n- Pilna istorija į JSONL: /data/logs/komfovent/komfovent_filters_YYYY-MM-DD.jsonl\n\nPastaba: node pavadinimai angliški, komentarai lietuviški."
+        "info": "Filtrų nusidėvėjimo modulis (atskiras flow).\n\nLogika:\n- Skaičiuoja „efektyvias valandas“ pagal fan % (20–100%).\n- Keitimo kriterijus: 2000 efektyvių val. ARBA 6 mėn – kas sueina greičiau.\n- Remaining% = min(remaining pagal val., remaining pagal laiką).\n- 3 pranešimai: 10%, 5%, 0% (tik po vieną per ciklą).\n- Reset per telefono notification action (FILTER_RESET) arba per mygtuką flow.\n\nPatvarumas:\n- Papildomai saugo state į /data/state/komfovent/filters_state.json ir startuojant atstato.\n\nLogging:\n- Context cache: ~10 dienų (ribojamas įrašų skaičius)\n- Pilna istorija į JSONL: /data/logs/komfovent/komfovent_filters_YYYY-MM-DD.jsonl\n\nPastaba: node pavadinimai angliški, komentarai lietuviški."
     },
     {
-        "id": "3eae7984a93c11bc",
-        "type": "comment",
-        "z": "d6a3a2540af1da95",
-        "name": "Module: Filters",
-        "info": "Filtrų nusidėvėjimo modulis.\n\nSkaičiuoja:\n- Likusį filtrų resursą (%) pagal 2000 „efektyvių val.“ ir 6 mėn terminą.\n- Efektyvias valandas pagal fan% (20–100%).\n\nIšveda į Home Assistant entity:\n- sensor.komfovent_filter_remaining (%), sensor.komfovent_filter_eff_hours (h)\n- sensor.komfovent_filter_days_since_reset (d)\n- binary_sensor.komfovent_filter_replace_needed\n\nReset:\n- Per telefono pranešimo action: FILTER_RESET (notify.mobile_app_g_iphone)\n- Arba per mygtuką: Reset Filters (Manual)\n\nLogging:\n- Context’e laikom trumpą istoriją (10 dienų)\n- Pilna istorija rašoma į JSONL daily failus (2 mėn retention tvarkoma atskirame logging flow vėliau)",
-        "x": 190,
-        "y": 60,
-        "wires": []
-    },
-    {
-        "id": "281277b24740e653",
+        "id": "aa10358772669529",
         "type": "inject",
-        "z": "d6a3a2540af1da95",
+        "z": "26a876f07cb669b2",
+        "name": "Load State (on start)",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 2,
+        "topic": "LOAD_STATE",
+        "payloadType": "date",
+        "x": 160,
+        "y": 100,
+        "wires": [
+            [
+                "5727ac44439894af"
+            ]
+        ]
+    },
+    {
+        "id": "5727ac44439894af",
+        "type": "function",
+        "z": "26a876f07cb669b2",
+        "name": "Build State Filename",
+        "func": "// Paruošiam state failo kelią.\n// Pastaba: jei /data nėra su-mountintas konteineryje, šitas mechanizmas neveiks (tada reik mount).\n\nconst base = '/data/state/komfovent';\nmsg.filename = `${base}/filters_state.json`;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 100,
+        "wires": [
+            [
+                "9316598ffbb11967"
+            ]
+        ]
+    },
+    {
+        "id": "9316598ffbb11967",
+        "type": "file in",
+        "z": "26a876f07cb669b2",
+        "name": "Read State File",
+        "filename": "filename",
+        "filenameType": "msg",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": true,
+        "encoding": "utf8",
+        "allProps": false,
+        "x": 600,
+        "y": 100,
+        "wires": [
+            [
+                "0fffae41c314b8f3"
+            ]
+        ]
+    },
+    {
+        "id": "0fffae41c314b8f3",
+        "type": "function",
+        "z": "26a876f07cb669b2",
+        "name": "Apply State",
+        "func": "// Atstatom flow state iš failo.\n// Jei failas tuščias / ne valid JSON – ignoruojam.\n\nfunction isNum(v){ return v !== null && v !== undefined && isFinite(v); }\n\nlet raw = msg.payload;\nif (typeof raw !== 'string' || raw.trim() === '') return null;\n\nlet st;\ntry { st = JSON.parse(raw); } catch(e) { return null; }\nif (!st || typeof st !== 'object') return null;\n\nconst now = Date.now();\n\n// Minimalus validavimas + fallback\nlet resetTs = isNum(st.filter_reset_ts) ? st.filter_reset_ts : now;\nlet effHours = isNum(st.filter_eff_hours) ? st.filter_eff_hours : 0;\nlet notifStage = ([null, 10, 5, 0].includes(st.filter_notif_stage)) ? st.filter_notif_stage : null;\nlet lastTick = isNum(st.filter_last_tick_ts) ? st.filter_last_tick_ts : now;\n\nflow.set('filter_reset_ts', resetTs);\nflow.set('filter_eff_hours', effHours);\nflow.set('filter_notif_stage', notifStage);\nflow.set('filter_last_tick_ts', lastTick);\n\nnode.status({ fill: 'blue', shape: 'dot', text: `STATE loaded | eff ${Number(effHours).toFixed(2)}h | notif ${notifStage}` });\nreturn null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 770,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "0bfbf10dfe5ec41b",
+        "type": "catch",
+        "z": "26a876f07cb669b2",
+        "name": "Catch (ignore missing state)",
+        "scope": [
+            "9316598ffbb11967"
+        ],
+        "uncaught": false,
+        "x": 580,
+        "y": 160,
+        "wires": [
+            [
+                "0d20fc06523a5b4f"
+            ]
+        ]
+    },
+    {
+        "id": "0d20fc06523a5b4f",
+        "type": "function",
+        "z": "26a876f07cb669b2",
+        "name": "Ignore State Read Error",
+        "func": "// Normalu pirmą kartą: state failo dar nėra.\nreturn null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 850,
+        "y": 160,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "10a4d1a3aacee57b",
+        "type": "inject",
+        "z": "26a876f07cb669b2",
         "name": "Tick (1 min)",
         "props": [
             {
@@ -37,17 +148,17 @@
         "topic": "tick",
         "payloadType": "date",
         "x": 120,
-        "y": 120,
+        "y": 220,
         "wires": [
             [
-                "da368130ce92b5a6"
+                "2554aa364d4e2b58"
             ]
         ]
     },
     {
-        "id": "c083519906cab546",
+        "id": "79f2e414deaec5bb",
         "type": "inject",
-        "z": "d6a3a2540af1da95",
+        "z": "26a876f07cb669b2",
         "name": "Reset Filters (Manual)",
         "props": [
             {
@@ -62,42 +173,102 @@
         "topic": "FILTER_RESET_MANUAL",
         "payloadType": "date",
         "x": 150,
-        "y": 180,
+        "y": 280,
         "wires": [
             [
-                "dc98a151b3e573fb"
+                "a0d202dfdb3c0539"
             ]
         ]
     },
     {
-        "id": "da368130ce92b5a6",
+        "id": "d1d2063407d53357",
+        "type": "server-events",
+        "z": "26a876f07cb669b2",
+        "name": "Mobile Action (FILTER_RESET)",
+        "server": "de0e06cd.8456e8",
+        "version": 6,
+        "exposeAsEntityConfig": "",
+        "eventType": "",
+        "eventData": "",
+        "waitForRunning": false,
+        "outputProperties": [],
+        "event_type": "mobile_app_notification_action",
+        "exposeToHomeAssistant": false,
+        "x": 180,
+        "y": 340,
+        "wires": [
+            [
+                "a0d202dfdb3c0539"
+            ]
+        ]
+    },
+    {
+        "id": "2554aa364d4e2b58",
         "type": "function",
-        "z": "d6a3a2540af1da95",
+        "z": "26a876f07cb669b2",
         "name": "Compute Wear",
-        "func": "/*************************************************\n * FILTER WEAR COMPUTE\n *\n * Skaičiavimas:\n * - Efektyvios valandos: kas minutę pridedam (fan%/100) * dt\n * - Fan% ribojamas: 20..100\n * - Likutis = min(likutis pagal 2000h, likutis pagal 6 mėn)\n * - Pranešimai: 10%, 5%, 0% (po vieną per ciklą)\n *\n * Logging:\n * - Context: trumpa istorija ~10 dienų (ribojamas įrašų skaičius)\n * - JSONL: predictive-ready daily failas /data/logs/komfovent/\n *************************************************/\n\n// ==== NUSTATYMAI ====\nconst FAN_MIN = 20;\nconst FAN_MAX = 100;\n\nconst HOURS_TARGET = 2000;          // „efektyvios valandos“\nconst DAYS_TARGET = 183;            // ~6 mėn (apytiksliai)\n\nconst NOTIF_10 = 10;\nconst NOTIF_5  = 5;\nconst NOTIF_0  = 0;\n\n// HA sensor entity (fan current)\nconst FAN_ENTITY = 'sensor.intake_fan_level_current';\n\nfunction clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }\nfunction isNum(v) { return v !== null && v !== undefined && isFinite(v); }\n\n// ==== HA states (robust) ====\nlet ha = global.get('homeassistant') || {};\nlet states =\n  (ha?.homeAssistant?.states) ||\n  (ha?.homeassistant?.states) ||\n  (ha?.states) ||\n  {};\n\nconst now = Date.now();\n\n// ==== STATE ==== \nlet lastTs = flow.get('filter_last_tick_ts');\nif (!isNum(lastTs)) lastTs = now;\n\nlet resetTs = flow.get('filter_reset_ts');\nif (!isNum(resetTs)) {\n  // jei pirmas startas – laikom, kad reset buvo „dabar“\n  resetTs = now;\n  flow.set('filter_reset_ts', resetTs);\n}\n\nlet effHours = Number(flow.get('filter_eff_hours') || 0);\nif (!isNum(effHours) || effHours < 0) effHours = 0;\n\n// notif stage: null / 10 / 5 / 0 (kad nesiųstų daugiau nei 3)\nlet notifStage = flow.get('filter_notif_stage');\nif (![null, 10, 5, 0].includes(notifStage)) notifStage = null;\n\n// ==== dt ==== \nlet dtMsRaw = now - lastTs;\nif (!isNum(dtMsRaw) || dtMsRaw < 0) dtMsRaw = 0;\n\nlet dtMsUsed = dtMsRaw;\nlet dtClamped = false;\n// apsauga nuo didelių šuolių (pvz. po restart) – max 10 min\nif (dtMsUsed > 10 * 60 * 1000) {\n  dtMsUsed = 10 * 60 * 1000;\n  dtClamped = true;\n}\n\nconst dtHours = dtMsUsed / 3600000;\n\n// ==== fan% ==== \nlet fanRaw = states[FAN_ENTITY]?.state;\nlet fan = parseFloat(fanRaw);\n\n// jei fan nežinomas – laikom minimalų\nif (!isNum(fan)) fan = FAN_MIN;\nfan = clamp(fan, FAN_MIN, FAN_MAX);\n\n// ==== efektyvios valandos ==== \nconst factor = fan / 100;\neffHours += factor * dtHours;\n\n// ==== laikas nuo reset ==== \nconst daysSinceReset = (now - resetTs) / (24 * 3600000);\n\n// ==== likutis pagal valandas ==== \nlet remainingByHours = 1 - (effHours / HOURS_TARGET);\nremainingByHours = clamp(remainingByHours, 0, 1);\n\n// ==== likutis pagal laiką ==== \nlet remainingByDays = 1 - (daysSinceReset / DAYS_TARGET);\nremainingByDays = clamp(remainingByDays, 0, 1);\n\n// ==== galutinis likutis ==== \nlet remaining = Math.min(remainingByHours, remainingByDays);\nlet remainingPct = Math.round(remaining * 100);\n\n// ==== replace needed ==== \nconst replaceNeeded = remainingPct <= 0;\n\n// ==== persist ==== \nflow.set('filter_last_tick_ts', now);\nflow.set('filter_eff_hours', Number(effHours.toFixed(3)));\nflow.set('filter_remaining_pct', remainingPct);\nflow.set('filter_days_since_reset', Number(daysSinceReset.toFixed(2)));\n\n// ==== status ==== \nnode.status({\n  fill: remainingPct <= 5 ? 'red' : remainingPct <= 10 ? 'yellow' : 'green',\n  shape: 'dot',\n  text: `remain ${remainingPct}% | eff ${effHours.toFixed(1)}h | days ${daysSinceReset.toFixed(0)} | fan ${fan}%`\n});\n\n// ==== notif decision ==== \nlet sendNotif = null;\n\nif (remainingPct <= NOTIF_0) {\n  if (notifStage !== 0) {\n    sendNotif = 0;\n    notifStage = 0;\n  }\n} else if (remainingPct <= NOTIF_5) {\n  if (notifStage !== 5 && notifStage !== 0) {\n    sendNotif = 5;\n    notifStage = 5;\n  }\n} else if (remainingPct <= NOTIF_10) {\n  if (notifStage === null) {\n    sendNotif = 10;\n    notifStage = 10;\n  }\n}\n\nflow.set('filter_notif_stage', notifStage);\n\n// ==== output ==== \nmsg._kind = 'filter_tick';\nmsg.payload = {\n  remaining_pct: remainingPct,\n  eff_hours: Number(effHours.toFixed(2)),\n  days_since_reset: Number(daysSinceReset.toFixed(1)),\n  replace_needed: replaceNeeded,\n  fan_pct: fan,\n  remaining_by_hours_pct: Math.round(remainingByHours * 100),\n  remaining_by_days_pct: Math.round(remainingByDays * 100),\n  notif: sendNotif,\n  _diag: {\n    dt_ms_raw: dtMsRaw,\n    dt_ms_used: dtMsUsed,\n    dt_clamped: dtClamped,\n    fan_raw: (fanRaw === undefined || fanRaw === null) ? null : fanRaw\n  }\n};\n\nreturn msg;",
+        "func": "/*************************************************\n * FILTER WEAR COMPUTE \n * - 0% nusidėvėjimas, kai Start/Stop yra Off (effHours neauga)\n * - Robust HA cache nuskaitymas (homeAssistant.states / homeassistant.states / states)\n * - Prideda _diag (dt_ms_raw/dt_ms_used/dt_clamped + fan_raw) predictive log'ams\n * - Suderinta su tavo msg.payload struktūra (likučiai + metrika)\n *************************************************/\n\nconst TZ = 'Europe/Vilnius';\n\nconst FAN_MIN = 20;\nconst FAN_MAX = 100;\nconst HOURS_TARGET = 2000;\nconst DAYS_TARGET = 183;\n\n// Jei turi global komfovent_entities – naudojam; jei ne, fallback.\nconst ents = global.get('komfovent_entities') || {};\nconst FAN_ENTITY = ents.fan_actual || 'sensor.intake_fan_level_current';\nconst RECUP_ENTITY = ents.recup || 'switch.start_stop';\n\nfunction clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }\nfunction isNum(v) { return v !== null && v !== undefined && isFinite(v); }\nfunction isBad(v) {\n  if (v === null || v === undefined) return true;\n  const s = String(v).toLowerCase();\n  return (s === 'unknown' || s === 'unavailable' || s === '');\n}\nfunction ltIso(tsMs) {\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ,\n    year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', second: '2-digit',\n    hour12: false\n  }).format(new Date(tsMs)).replace(' ', 'T');\n}\n\n// ===== HA cache (robust) =====\nconst ha = global.get('homeassistant') || {};\nconst states =\n  (ha?.homeAssistant?.states) ||\n  (ha?.homeassistant?.states) ||\n  (ha?.states) ||\n  {};\n\n// ===== Time base =====\nconst now = Date.now();\nlet lastTs = flow.get('filter_last_tick_ts');\nif (!isNum(lastTs)) lastTs = now;\n\nlet resetTs = flow.get('filter_reset_ts');\nif (!isNum(resetTs)) resetTs = now;\n\n// effHours kaupiamas tik kai recup ON\nlet effHours = Number(flow.get('filter_eff_hours') || 0);\nif (!isNum(effHours)) effHours = 0;\n\n// 1) dt raw + clamped (max 10 min)\nconst dtMsRaw = now - lastTs;\nlet dtMsUsed = dtMsRaw;\nlet dtClamped = false;\n\nif (!isNum(dtMsUsed) || dtMsUsed < 0) dtMsUsed = 0;\nconst MAX_DT = 10 * 60 * 1000;\nif (dtMsUsed > MAX_DT) { dtMsUsed = MAX_DT; dtClamped = true; }\n\nconst dtHours = dtMsUsed / 3600000;\n\n// 2) Recup + fan nuskaitymas\nconst recupRaw = states?.[RECUP_ENTITY]?.state;\nconst recupIsOn = (!isBad(recupRaw) && String(recupRaw).toLowerCase() === 'on');\n\nconst fanRaw = states?.[FAN_ENTITY]?.state;\nlet fanRawNum = null;\nif (!isBad(fanRaw)) {\n  const tmp = Number(fanRaw);\n  fanRawNum = isFinite(tmp) ? tmp : null;\n}\n\n// 3) Fan used (tikras 0, kai OFF arba bloga reikšmė)\nlet fanUsed = 0;\nif (recupIsOn && isNum(fanRawNum) && fanRawNum > 0) {\n  fanUsed = clamp(Math.round(fanRawNum), FAN_MIN, FAN_MAX);\n} else {\n  fanUsed = 0;\n}\n\n// 4) Wear skaičiavimas: kai OFF – effHours NEAUGA (0% dėvėjimas)\nif (recupIsOn && fanUsed > 0) {\n  effHours += (fanUsed / 100) * dtHours;\n}\n\n// 5) Likę % (valandom + dienom)\nconst daysSinceReset = (now - resetTs) / (24 * 3600000);\n\nconst remainingByHours = clamp(1 - (effHours / HOURS_TARGET), 0, 1);\nconst remainingByDays = clamp(1 - (daysSinceReset / DAYS_TARGET), 0, 1);\n\nconst remainingByHoursPct = Math.round(remainingByHours * 100);\nconst remainingByDaysPct = Math.round(remainingByDays * 100);\nconst remainingPct = Math.round(Math.min(remainingByHours, remainingByDays) * 100);\nconst replaceNeeded = (remainingPct <= 0);\n\n// 6) Persist\nflow.set('filter_last_tick_ts', now);\nflow.set('filter_eff_hours', Number(effHours.toFixed(3)));\nflow.set('filter_remaining_pct', remainingPct);\n\n// 7) Status\nnode.status({\n  fill: remainingPct <= 10 ? 'red' : 'green',\n  shape: 'dot',\n  text: `remain ${remainingPct}% | fan ${fanUsed}% | ${recupIsOn ? 'ON' : 'OFF'}`\n});\n\n// 8) Output (standartinis payload + _diag predictive log'ams)\nif (!isNum(remainingPct) || !isNum(effHours) || !isNum(daysSinceReset)) {\n  // jei kažkas labai blogai – nesiunčiam, kad nepaskleist invalidų\n  return null;\n}\n\nmsg.payload = {\n  remaining_pct: remainingPct,\n  eff_hours: Number(effHours.toFixed(2)),\n  days_since_reset: Number(daysSinceReset.toFixed(1)),\n  fan_pct: fanUsed,\n  replace_needed: replaceNeeded,\n\n  // papildomai predictive’ui (naudinga, nes min() logika)\n  remaining_by_hours_pct: remainingByHoursPct,\n  remaining_by_days_pct: remainingByDaysPct,\n\n  // diagnostika log builderiui (kad dt_* ir fan_raw nebūtų null)\n  _diag: {\n    ts: ltIso(now),\n    dt_ms_raw: isNum(dtMsRaw) ? Math.round(dtMsRaw) : null,\n    dt_ms_used: isNum(dtMsUsed) ? Math.round(dtMsUsed) : null,\n    dt_clamped: dtClamped,\n    fan_raw: fanRawNum\n  }\n};\n\n// patogūs shortcut’ai (jei kažkur dar skaitai iš root)\nmsg.eff_hours = msg.payload.eff_hours;\nmsg.days_since = msg.payload.days_since_reset;\nmsg.replace_needed = msg.payload.replace_needed;\n\nreturn msg;",
         "outputs": 1,
-        "timeout": "",
+        "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 380,
-        "y": 120,
+        "x": 300,
+        "y": 180,
         "wires": [
             [
-                "06431fa6fe847429",
-                "ee2ab3fea99738ed",
-                "2778d245d7e82318",
-                "cb857935cfb8cbda",
-                "698459997b0c5f16",
-                "038d19e6a0c2cce8"
+                "ee6aa7138591a8a6",
+                "adde1b13052c6e69",
+                "7b245bbede663786",
+                "5e0621c2d1c0808e",
+                "84c36496d330a8a8",
+                "69f44aac0f54a053",
+                "a670409171e3291a"
             ]
         ]
     },
     {
-        "id": "06431fa6fe847429",
+        "id": "adde1b13052c6e69",
+        "type": "function",
+        "z": "26a876f07cb669b2",
+        "name": "Build State JSON",
+        "func": "// State į failą, kad išliktų po restart/deploy net jei context nepersistina.\n\nconst now = Date.now();\n\nconst st = {\n  filter_reset_ts: flow.get('filter_reset_ts') ?? now,\n  filter_eff_hours: flow.get('filter_eff_hours') ?? 0,\n  filter_notif_stage: flow.get('filter_notif_stage') ?? null,\n  filter_last_tick_ts: flow.get('filter_last_tick_ts') ?? now\n};\n\nmsg.filename = '/data/state/komfovent/filters_state.json';\nmsg.payload = JSON.stringify(st);\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 510,
+        "y": 220,
+        "wires": [
+            [
+                "bb806453a1ded1a6"
+            ]
+        ]
+    },
+    {
+        "id": "bb806453a1ded1a6",
+        "type": "file",
+        "z": "26a876f07cb669b2",
+        "name": "Write State File",
+        "filename": "filename",
+        "filenameType": "msg",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "true",
+        "encoding": "utf8",
+        "x": 720,
+        "y": 220,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "ee6aa7138591a8a6",
         "type": "switch",
-        "z": "d6a3a2540af1da95",
+        "z": "26a876f07cb669b2",
         "name": "Route Notification",
         "property": "payload.notif",
         "propertyType": "msg",
@@ -121,206 +292,199 @@
         "checkall": "true",
         "repair": false,
         "outputs": 3,
-        "x": 660,
-        "y": 120,
+        "x": 490,
+        "y": 280,
         "wires": [
             [
-                "f5f1ceb0627b7801"
+                "315fef350c453f99"
             ],
             [
-                "390a3980a757a629"
+                "a0be029d05df41cf"
             ],
             [
-                "6c15da8dd3352ff0"
+                "51261ea572b77c67"
             ]
         ]
     },
     {
-        "id": "f5f1ceb0627b7801",
+        "id": "315fef350c453f99",
         "type": "function",
-        "z": "d6a3a2540af1da95",
+        "z": "26a876f07cb669b2",
         "name": "Build Notification (10%)",
         "func": "// Pranešimas kai liko 10%\nconst p = msg.payload || {};\nmsg.payload = {\n  title: 'Komfovent: filtrai',\n  message: `Liko ~${p.remaining_pct}% filtrų resurso. Efektyvios val.: ${p.eff_hours}h (fan ${p.fan_pct}%).`,\n  data: {}\n};\nreturn msg;",
         "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 930,
-        "y": 80,
-        "wires": [
-            [
-                "e206226af20a0a90"
-            ]
-        ]
-    },
-    {
-        "id": "390a3980a757a629",
-        "type": "function",
-        "z": "d6a3a2540af1da95",
-        "name": "Build Notification (5%)",
-        "func": "// Pranešimas kai liko 5%\nconst p = msg.payload || {};\nmsg.payload = {\n  title: 'Komfovent: filtrai',\n  message: `Liko ~${p.remaining_pct}% filtrų resurso. Rekomenduojama pasiruošti keitimui.`,\n  data: {}\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 920,
-        "y": 120,
-        "wires": [
-            [
-                "e206226af20a0a90"
-            ]
-        ]
-    },
-    {
-        "id": "6c15da8dd3352ff0",
-        "type": "function",
-        "z": "d6a3a2540af1da95",
-        "name": "Build Notification (Replace + Action)",
-        "func": "// Pranešimas kai laikas keisti filtrus (0%)\n// Įdedam action mygtuką „Pakeičiau filtrus“.\nmsg.payload = {\n  title: 'Komfovent: laikas keisti filtrus',\n  message: 'Filtrų resursas pasibaigė (0%). Pakeitus – paspauskite „Pakeičiau filtrus“.',\n  data: {\n    actions: [\n      {\n        action: 'FILTER_RESET',\n        title: 'Pakeičiau filtrus'\n      }\n    ]\n  }\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 965,
-        "y": 160,
-        "wires": [
-            [
-                "e206226af20a0a90"
-            ]
-        ]
-    },
-    {
-        "id": "e206226af20a0a90",
-        "type": "function",
-        "z": "d6a3a2540af1da95",
-        "name": "Normalize Notify Payload",
-        "func": "// Užtikrinam, kad notify data visada būtų validus JSON.\n// HA call-service node naudoja payload.data_json (string).\n\nconst p = msg.payload || {};\nif (!p.title) p.title = 'Komfovent';\nif (!p.message) return null;\n\nconst dataObj = (p.data && typeof p.data === 'object') ? p.data : {};\nmsg.payload = {\n  title: String(p.title),\n  message: String(p.message),\n  data_json: JSON.stringify(dataObj)\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 1190,
-        "y": 120,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "361ff932defdb7f1",
-        "type": "server-events",
-        "z": "d6a3a2540af1da95",
-        "name": "Mobile Action (FILTER_RESET)",
-        "server": "de0e06cd.8456e8",
-        "version": 6,
-        "exposeAsEntityConfig": "",
-        "eventType": "",
-        "eventData": "",
-        "waitForRunning": false,
-        "outputProperties": [],
-        "event_type": "mobile_app_notification_action",
-        "exposeToHomeAssistant": false,
-        "x": 170,
-        "y": 240,
-        "wires": [
-            [
-                "dc98a151b3e573fb"
-            ]
-        ]
-    },
-    {
-        "id": "dc98a151b3e573fb",
-        "type": "function",
-        "z": "d6a3a2540af1da95",
-        "name": "Handle Reset",
-        "func": "// Apdorojam reset:\n// - Telefonas (mobile_app_notification_action) su action=FILTER_RESET\n// - Arba mygtukas flow (topic=FILTER_RESET_MANUAL)\n\nconst action = msg.payload?.event?.action || msg.payload?.action;\nconst manual = (msg.topic === 'FILTER_RESET_MANUAL');\n\nif (!(action === 'FILTER_RESET' || manual)) {\n  return null;\n}\n\nconst now = Date.now();\nflow.set('filter_reset_ts', now);\nflow.set('filter_eff_hours', 0);\nflow.set('filter_notif_stage', null);\nflow.set('filter_last_tick_ts', now);\n\nnode.status({ fill: 'blue', shape: 'dot', text: 'RESET: filtrai atstatyti' });\n\nmsg._kind = 'filter_reset';\nmsg.payload = {\n  remaining_pct: 100,\n  eff_hours: 0,\n  days_since_reset: 0,\n  replace_needed: false,\n  fan_pct: null,\n  remaining_by_hours_pct: 100,\n  remaining_by_days_pct: 100,\n  notif: null,\n  _diag: {\n    dt_ms_raw: null,\n    dt_ms_used: null,\n    dt_clamped: false,\n    fan_raw: null\n  }\n};\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 430,
-        "y": 240,
-        "wires": [
-            [
-                "1f5ae73e94bf67fd",
-                "ee2ab3fea99738ed",
-                "2778d245d7e82318",
-                "cb857935cfb8cbda",
-                "698459997b0c5f16",
-                "038d19e6a0c2cce8"
-            ]
-        ]
-    },
-    {
-        "id": "1f5ae73e94bf67fd",
-        "type": "function",
-        "z": "d6a3a2540af1da95",
-        "name": "Build Notification (Reset Confirm)",
-        "func": "// Patvirtinimas po reset\nmsg.payload = {\n  title: 'Komfovent: filtrai',\n  message: 'Filtrų skaitliukas atstatytas (reset).',\n  data: {}\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
+        "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
         "x": 750,
-        "y": 240,
+        "y": 260,
         "wires": [
             [
-                "e206226af20a0a90"
+                "cd0de83460fe4460"
             ]
         ]
     },
     {
-        "id": "038d19e6a0c2cce8",
+        "id": "a0be029d05df41cf",
         "type": "function",
-        "z": "d6a3a2540af1da95",
-        "name": "Build Log Record (JSONL + Cache)",
-        "func": "// Predictive-ready log įrašas (filters modulis v2)\n// - Flow context'e laikom trumpą cache (~10 dienų)\n// - Į failą rašom JSONL (viena eilutė = vienas įvykis)\n// - Naudojam Compute/Reset pateiktą diagnostiką (dt, fan_raw)\n\nconst tz = 'Europe/Vilnius';\nconst p = msg.payload || {};\nconst diag = (p && typeof p._diag === 'object') ? p._diag : {};\n\n// ====== VERSIONING ======\nconst SCHEMA_VER = 2;\nconst FLOW_VER = 4;   // bendra versijavimo taisyklė: sujungus control+learning = v4\n\n// ====== EVENT TYPE ======\nconst kind = msg._kind || 'filter_tick';\n\n// ====== HA alarm ======\nlet ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\n\nconst alarmState = states['alarm_control_panel.home']?.state || null;\nconst occupied = (String(alarmState || '') === 'disarmed');\n\n// ====== Time LT ======\nconst now = Date.now();\nconst d = new Date();\n\nconst parts = new Intl.DateTimeFormat('en-GB', {\n  timeZone: tz,\n  weekday: 'short',\n  hour: '2-digit',\n  hour12: false\n}).formatToParts(d);\n\nconst dow = parts.find(x => x.type === 'weekday')?.value || null;\nconst hour = Number(parts.find(x => x.type === 'hour')?.value || 0);\n\nconst ts = new Intl.DateTimeFormat('sv-SE', {\n  timeZone: tz,\n  year: 'numeric', month: '2-digit', day: '2-digit',\n  hour: '2-digit', minute: '2-digit', second: '2-digit',\n  hour12: false\n}).format(d).replace(' ', 'T');\n\n// ====== Filename ======\nconst dateOnly = ts.slice(0, 10);\nconst filename = `/data/logs/komfovent/komfovent_filters_${dateOnly}.jsonl`;\n\n// ====== dt diagnostika (iš Compute/Reset) ======\nconst dtMsRaw = (diag.dt_ms_raw === undefined) ? null : diag.dt_ms_raw;\nconst dtMsUsed = (diag.dt_ms_used === undefined) ? null : diag.dt_ms_used;\nconst dtClamped = !!diag.dt_clamped;\nconst dtSec = (dtMsUsed === null || dtMsUsed === undefined) ? null : Math.round(Number(dtMsUsed) / 1000);\n\n// ====== Fan diagnostika ======\nconst fanRaw = (diag.fan_raw === undefined) ? null : diag.fan_raw;\nconst fanUsed = (p.fan_pct === null || p.fan_pct === undefined) ? null : Number(p.fan_pct);\n\nlet fanRawNum = null;\nif (fanRaw !== null && fanRaw !== undefined && fanRaw !== '') {\n  const tmp = Number(fanRaw);\n  fanRawNum = isFinite(tmp) ? tmp : null;\n}\n\nconst fanClamped = (fanRawNum !== null && fanUsed !== null) ? (fanRawNum !== fanUsed) : false;\n\n// ====== Reset info ======\nconst resetTsEpoch = flow.get('filter_reset_ts') || null;\nlet resetTsIso = null;\n\nif (resetTsEpoch) {\n  const rd = new Date(resetTsEpoch);\n  resetTsIso = new Intl.DateTimeFormat('sv-SE', {\n    timeZone: tz,\n    year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', second: '2-digit',\n    hour12: false\n  }).format(rd).replace(' ', 'T');\n}\n\n// ====== Record ======\nconst rec = {\n  schema_ver: SCHEMA_VER,\n  flow_ver: FLOW_VER,\n  kind,\n\n  ts,\n  occupied,\n  alarm_state: alarmState,\n  dow,\n  hour,\n  mode: 'filters',\n\n  // time diagnostics\n  dt_ms_raw: dtMsRaw,\n  dt_ms_used: dtMsUsed,\n  dt_s: dtSec,\n  dt_clamped: dtClamped,\n\n  // fan diagnostics\n  fan_raw: fanRawNum,\n  fan_used: fanUsed,\n  fan_clamped: fanClamped,\n\n  // common telemetry placeholders (predictive-ready struktūra)\n  co2: null,\n  rate: null,\n  boost_active: null,\n  outdoor: null,\n  humidity: null,\n  windows_long_open: null,\n\n  // filter model\n  filter_remaining_pct: (p.remaining_pct === undefined) ? null : Number(p.remaining_pct),\n  filter_eff_hours: (p.eff_hours === undefined) ? null : Number(p.eff_hours),\n  filter_days_since_reset: (p.days_since_reset === undefined) ? null : Number(p.days_since_reset),\n  filter_replace_needed: (p.replace_needed === undefined) ? null : !!p.replace_needed,\n  filter_remaining_by_hours_pct: (p.remaining_by_hours_pct === undefined) ? null : Number(p.remaining_by_hours_pct),\n  filter_remaining_by_days_pct: (p.remaining_by_days_pct === undefined) ? null : Number(p.remaining_by_days_pct),\n\n  filter_reset_ts: resetTsIso,\n  filter_reset_epoch: resetTsEpoch\n};\n\n// ====== Context cache ======\nlet log = flow.get('filter_log') || [];\nlog.push(rec);\n\nconst MAX = 15000; // ~10 dienų jei kas minutę\nif (log.length > MAX) log = log.slice(log.length - MAX);\n\nflow.set('filter_log', log);\n\n// ====== Output ======\nmsg.filename = filename;\nmsg.payload = JSON.stringify(rec) + \"\\n\";\nreturn msg;",
+        "z": "26a876f07cb669b2",
+        "name": "Build Notification (5%)",
+        "func": "// Pranešimas kai liko 5%\nconst p = msg.payload || {};\nmsg.payload = {\n  title: 'Komfovent: filtrai',\n  message: `Liko ~${p.remaining_pct}% filtrų resurso. Rekomenduojama pasiruošti keitimui.`,\n  data: {}\n};\nreturn msg;",
         "outputs": 1,
-        "timeout": "",
+        "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 730,
-        "y": 320,
+        "x": 740,
+        "y": 300,
         "wires": [
             [
-                "08682221af1be5de"
+                "cd0de83460fe4460"
             ]
         ]
     },
     {
-        "id": "08682221af1be5de",
-        "type": "file",
-        "z": "d6a3a2540af1da95",
-        "name": "Append JSONL (filters daily)",
-        "filename": "filename",
-        "filenameType": "msg",
-        "appendNewline": false,
-        "createDir": true,
-        "overwriteFile": "false",
-        "encoding": "none",
-        "x": 1030,
-        "y": 320,
+        "id": "51261ea572b77c67",
+        "type": "function",
+        "z": "26a876f07cb669b2",
+        "name": "Build Notification (Replace + Action)",
+        "func": "// Pranešimas kai laikas keisti filtrus (0%)\n// Įdedam action mygtuką „Pakeičiau filtrus“.\nmsg.payload = {\n  title: 'Komfovent: laikas keisti filtrus',\n  message: 'Filtrų resursas pasibaigė (0%). Pakeitus – paspauskite „Pakeičiau filtrus“.',\n  data: {\n    actions: [\n      { action: 'FILTER_RESET', title: 'Pakeičiau filtrus' }\n    ]\n  }\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1050,
+        "y": 300,
+        "wires": [
+            [
+                "cd0de83460fe4460"
+            ]
+        ]
+    },
+    {
+        "id": "cd0de83460fe4460",
+        "type": "function",
+        "z": "26a876f07cb669b2",
+        "name": "Normalize Notify Payload",
+        "func": "// Užtikrinam, kad notify data visada būtų validus JSON.\n// HA call-service node naudoja data JSON (objektą).\n\nconst p = msg.payload || {};\nif (!p.title) p.title = 'Komfovent';\nif (!p.message) return null;\n\nconst dataObj = (p.data && typeof p.data === 'object') ? p.data : {};\n\nmsg.payload = {\n  title: String(p.title),\n  message: String(p.message),\n  data: dataObj\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1010,
+        "y": 260,
+        "wires": [
+            [
+                "814eb773f3398107"
+            ]
+        ]
+    },
+    {
+        "id": "814eb773f3398107",
+        "type": "api-call-service",
+        "z": "26a876f07cb669b2",
+        "name": "HA Notify: mobile_app_g_iphone",
+        "server": "de0e06cd.8456e8",
+        "version": 7,
+        "debugenabled": false,
+        "action": "",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\"title\":\"{{payload.title}}\",\"message\":\"{{payload.message}}\",\"data\":{{{payload.data}}}}",
+        "dataType": "jsonata",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "notify",
+        "service": "mobile_app_g_iphone",
+        "x": 1300,
+        "y": 260,
         "wires": [
             []
         ]
     },
     {
-        "id": "ee2ab3fea99738ed",
+        "id": "a0d202dfdb3c0539",
+        "type": "function",
+        "z": "26a876f07cb669b2",
+        "name": "Handle Reset",
+        "func": "// Apdorojam reset:\n// - Telefonas (mobile_app_notification_action) su action=FILTER_RESET\n// - Arba mygtukas flow (topic=FILTER_RESET_MANUAL)\n\nconst action = msg.payload?.event?.action || msg.payload?.action;\nconst manual = (msg.topic === 'FILTER_RESET_MANUAL');\n\nif (!(action === 'FILTER_RESET' || manual)) return null;\n\nconst now = Date.now();\nflow.set('filter_reset_ts', now);\nflow.set('filter_eff_hours', 0);\nflow.set('filter_notif_stage', null);\nflow.set('filter_last_tick_ts', now);\n\nnode.status({ fill: 'blue', shape: 'dot', text: 'RESET: filtrai atstatyti' });\n\nmsg._kind = 'filter_reset';\nmsg.payload = {\n  remaining_pct: 100,\n  eff_hours: 0,\n  days_since_reset: 0,\n  replace_needed: false,\n  fan_pct: null,\n  remaining_by_hours_pct: 100,\n  remaining_by_days_pct: 100,\n  notif: null,\n  _diag: {\n    dt_ms_raw: null,\n    dt_ms_used: null,\n    dt_clamped: false,\n    fan_raw: null\n  }\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 340,
+        "wires": [
+            [
+                "f5a4d69c346bb9b3",
+                "adde1b13052c6e69",
+                "7b245bbede663786",
+                "5e0621c2d1c0808e",
+                "84c36496d330a8a8",
+                "69f44aac0f54a053",
+                "a670409171e3291a"
+            ]
+        ]
+    },
+    {
+        "id": "f5a4d69c346bb9b3",
+        "type": "function",
+        "z": "26a876f07cb669b2",
+        "name": "Build Notification (Reset Confirm)",
+        "func": "// Patvirtinimas po reset\nmsg.payload = {\n  title: 'Komfovent: filtrai',\n  message: 'Filtrų skaitliukas atstatytas (reset).',\n  data: {}\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 780,
+        "y": 340,
+        "wires": [
+            [
+                "cd0de83460fe4460"
+            ]
+        ]
+    },
+    {
+        "id": "a670409171e3291a",
+        "type": "function",
+        "z": "26a876f07cb669b2",
+        "name": "Build Log Record",
+        "func": "// Predictive-ready log įrašas (filters modulis)\n// - Flow context'e laikom trumpą cache (~10 dienų)\n// - Į failą rašo Logging modulis (per Link Out -> Log In: Filters)\n// Output:\n// - msg.log_type = 'filters'\n// - msg.log_record = object (be filename/payload)\n\nconst TZ = 'Europe/Vilnius';\nconst p = (msg && typeof msg.payload === 'object' && msg.payload !== null) ? msg.payload : {};\nconst diag = (p && typeof p._diag === 'object' && p._diag !== null) ? p._diag : {};\n\nlet ha = global.get('homeassistant') || {};\nlet states =\n  (ha?.homeAssistant?.states) ||\n  (ha?.homeassistant?.states) ||\n  (ha?.states) ||\n  {};\n\nfunction isBad(v) {\n  if (v === null || v === undefined) return true;\n  const s = String(v).toLowerCase();\n  return (s === 'unknown' || s === 'unavailable' || s === '');\n}\n\nfunction ltIso(tsMs) {\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ,\n    year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', second: '2-digit',\n    hour12: false\n  }).format(new Date(tsMs)).replace(' ', 'T');\n}\n\nfunction numOrNull(v) {\n  const n = Number(v);\n  return isFinite(n) ? n : null;\n}\n\nconst kind = (typeof msg._kind === 'string' && msg._kind.trim()) ? msg._kind.trim() : 'filter_tick';\n\n// ===== laikas =====\nconst now = Date.now();\nconst nowDate = new Date(now);\nconst ts = ltIso(now);\n\nconst dow = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(nowDate);\nconst hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hour12: false }).format(nowDate));\n\n// ===== occupied / alarm (su fallback) =====\nconst alarmEnt = 'alarm_control_panel.home';\nconst alarmRaw = states?.[alarmEnt]?.state;\nlet alarmState = isBad(alarmRaw) ? (flow.get('alarm_last_known') || null) : String(alarmRaw);\nif (alarmState) flow.set('alarm_last_known', alarmState);\n\nconst occupied = (String(alarmState || '') === 'disarmed');\n\n// ===== dt / fan diagnostika =====\nconst dtMsRaw = (diag.dt_ms_raw === undefined) ? null : numOrNull(diag.dt_ms_raw);\nconst dtMsUsed = (diag.dt_ms_used === undefined) ? null : numOrNull(diag.dt_ms_used);\nconst dtClamped = !!diag.dt_clamped;\nconst dtSec = (dtMsUsed === null) ? null : Math.round(dtMsUsed / 1000);\n\nconst fanRawNum = (diag.fan_raw === undefined) ? null : numOrNull(diag.fan_raw);\nconst fanUsed = (p.fan_pct === undefined) ? null : numOrNull(p.fan_pct);\nconst fanClamped = (fanRawNum !== null && fanUsed !== null) ? (fanRawNum !== fanUsed) : false;\n\n// ===== reset =====\nlet resetTsEpoch = flow.get('filter_reset_ts');\nresetTsEpoch = isFinite(Number(resetTsEpoch)) ? Number(resetTsEpoch) : null;\nconst resetTsIso = resetTsEpoch ? ltIso(resetTsEpoch) : null;\n\n// ===== record (schema_ver/flow_ver uždės Logging modulis) =====\nconst rec = {\n  module: 'filters',\n  kind,\n\n  ts,\n  occupied,\n  alarm_state: alarmState,\n  dow,\n  hour,\n  mode: 'filters',\n\n  dt_ms_raw: dtMsRaw,\n  dt_ms_used: dtMsUsed,\n  dt_s: dtSec,\n  dt_clamped: dtClamped,\n\n  fan_raw: fanRawNum,\n  fan_used: fanUsed,\n  fan_clamped: fanClamped,\n\n  // predictive fields (vieninga struktūra)\n  co2: null,\n  rate: null,\n  boost_active: null,\n  outdoor: null,\n  humidity: null,\n  windows_long_open: null,\n\n  // filters metrics\n  filter_remaining_pct: (p.remaining_pct === undefined) ? null : numOrNull(p.remaining_pct),\n  filter_eff_hours: (p.eff_hours === undefined) ? null : numOrNull(p.eff_hours),\n  filter_days_since_reset: (p.days_since_reset === undefined) ? null : numOrNull(p.days_since_reset),\n  filter_replace_needed: (p.replace_needed === undefined) ? null : !!p.replace_needed,\n  filter_remaining_by_hours_pct: (p.remaining_by_hours_pct === undefined) ? null : numOrNull(p.remaining_by_hours_pct),\n  filter_remaining_by_days_pct: (p.remaining_by_days_pct === undefined) ? null : numOrNull(p.remaining_by_days_pct),\n\n  filter_reset_ts: resetTsIso,\n  filter_reset_epoch: resetTsEpoch\n};\n\n// ===== short cache (~10 dienų) =====\n// Jei kvietimas kas 1 min: 10d ≈ 14400.\n// Jei kas 10 min: 10d ≈ 1440.\n// Paliekam saugiai 15000 (atitinka tavo „~10 dienų“ net ir 1 min tick).\nlet log = flow.get('filter_log');\nif (!Array.isArray(log)) log = [];\nlog.push(rec);\n\nconst MAX = 15000;\nif (log.length > MAX) log = log.slice(log.length - MAX);\nflow.set('filter_log', log);\n\n// ===== handoff to Logging module =====\nmsg.log_type = 'filters';\nmsg.log_record = rec;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 730,
+        "y": 400,
+        "wires": [
+            [
+                "b9c13e70a0382586"
+            ]
+        ]
+    },
+    {
+        "id": "7b245bbede663786",
         "type": "ha-sensor",
-        "z": "d6a3a2540af1da95",
+        "z": "26a876f07cb669b2",
         "name": "HA Sensor: Filter Remaining",
         "entityConfig": "ha_sensor_remaining",
         "version": 0,
@@ -356,15 +520,15 @@
         "inputOverride": "allow",
         "outputProperties": [],
         "x": 740,
-        "y": 400,
+        "y": 480,
         "wires": [
             []
         ]
     },
     {
-        "id": "2778d245d7e82318",
+        "id": "5e0621c2d1c0808e",
         "type": "ha-sensor",
-        "z": "d6a3a2540af1da95",
+        "z": "26a876f07cb669b2",
         "name": "HA Sensor: Filter Effective Hours",
         "entityConfig": "ha_sensor_effhours",
         "version": 0,
@@ -373,16 +537,16 @@
         "attributes": [],
         "inputOverride": "allow",
         "outputProperties": [],
-        "x": 770,
-        "y": 460,
+        "x": 760,
+        "y": 540,
         "wires": [
             []
         ]
     },
     {
-        "id": "cb857935cfb8cbda",
+        "id": "84c36496d330a8a8",
         "type": "ha-sensor",
-        "z": "d6a3a2540af1da95",
+        "z": "26a876f07cb669b2",
         "name": "HA Sensor: Days Since Reset",
         "entityConfig": "ha_sensor_days",
         "version": 0,
@@ -391,16 +555,16 @@
         "attributes": [],
         "inputOverride": "allow",
         "outputProperties": [],
-        "x": 750,
-        "y": 520,
+        "x": 740,
+        "y": 600,
         "wires": [
             []
         ]
     },
     {
-        "id": "698459997b0c5f16",
+        "id": "69f44aac0f54a053",
         "type": "ha-binary-sensor",
-        "z": "d6a3a2540af1da95",
+        "z": "26a876f07cb669b2",
         "name": "HA Binary Sensor: Replace Needed",
         "entityConfig": "ha_binary_replace",
         "version": 0,
@@ -410,10 +574,23 @@
         "inputOverride": "allow",
         "outputProperties": [],
         "x": 760,
-        "y": 580,
+        "y": 660,
         "wires": [
             []
         ]
+    },
+    {
+        "id": "b9c13e70a0382586",
+        "type": "link out",
+        "z": "26a876f07cb669b2",
+        "name": "link out 2",
+        "mode": "link",
+        "links": [
+            "86d48d99068805f5"
+        ],
+        "x": 865,
+        "y": 400,
+        "wires": []
     },
     {
         "id": "de0e06cd.8456e8",
@@ -602,7 +779,7 @@
         "debugEnabled": false
     },
     {
-        "id": "fa3ee4398f079088",
+        "id": "d377cf999abbf87d",
         "type": "global-config",
         "env": [],
         "modules": {

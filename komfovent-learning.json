@@ -1,25 +1,15 @@
 [
     {
-        "id": "ba9883939fe4270b",
+        "id": "7901ee0f1259f9cf",
         "type": "tab",
-        "label": "Komfovent – Module: Auto-Learning",
+        "label": "Komfovent - Module: Auto-Learning",
         "disabled": false,
         "info": ""
     },
     {
-        "id": "73ea89c35dffac66",
-        "type": "comment",
-        "z": "ba9883939fe4270b",
-        "name": "Module: Auto-Learning",
-        "info": "Paskirtis:\nCO₂ įjungimo slenksčio mokymasis pagal realius namų CO₂ duomenis.\n\nVeikimas:\n• CO₂ taškas kas 10 min į flow.co2_log (retention ~10 d)\n• Kasdien 03:00 LT analizuoja paskutines 24 h\n• Profilis parenkamas pagal ankstesnę parą (kad 03:00 nenaudotų „neteisingos“ dienos)\n\nApsaugos:\n• Mokosi tik kai alarm = disarmed\n• Gap Guard: jei trūksta >35% tikėtinų taškų — blokuoja\n• Stability Lock: jei max<650 arba (max-min)<100 — blokuoja\n\nLogging:\n• Pilna istorija rašoma JSONL į /data/logs/komfovent/komfovent_learning_YYYY-MM-DD.jsonl\n• Įrašai predictive-ready: ts, occupied, dow, hour, alarm, co2, profile, avgRate, delta, threshold, blocked ir pan.\n\nPastaba:\nSlenksčio šaltinis/taikinys — HA input_number.co2_on_threshold (source of truth).",
-        "x": 260,
-        "y": 60,
-        "wires": []
-    },
-    {
-        "id": "40811f47a04f0c4b",
+        "id": "aed1f77d4fa4a6cc",
         "type": "inject",
-        "z": "ba9883939fe4270b",
+        "z": "7901ee0f1259f9cf",
         "name": "Scheduler: Log CO2 (10 min)",
         "props": [
             {
@@ -30,96 +20,59 @@
         "crontab": "",
         "once": true,
         "onceDelay": 2,
-        "topic": "",
+        "topic": "co2_sample",
         "payload": "",
         "payloadType": "date",
-        "x": 190,
-        "y": 120,
+        "x": 170,
+        "y": 100,
         "wires": [
             [
-                "6ffb812d5b5da612"
+                "c8515b06d019b69a"
             ]
         ]
     },
     {
-        "id": "6ffb812d5b5da612",
+        "id": "c8515b06d019b69a",
         "type": "function",
-        "z": "ba9883939fe4270b",
-        "name": "Log CO2 Sample (10 min)",
-        "func": "// ===== CO₂ log kaupimas (retention ~10 d) =====\n// • Skaito CO₂ ir ALARM būseną iš HA global cache\n// • Į flow.co2_log prideda tašką kas 10 min\n// • Ignoruoja netinkamas reikšmes (unknown/unavailable/NaN)\n// • Laiko max 1440 taškų (~10 dienų, jei kas 10 min)\n// • Status’e rodo paskutinę reikšmę ir log’o apimtį\n// • Papildomai paruošia predictive-ready laukus: occupied, dow, hour\n\nconst TZ = 'Europe/Vilnius';\n\nfunction isNum(v) { return v !== null && v !== undefined && isFinite(v); }\n\nfunction ltDow(ts) {\n  const wd = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(new Date(ts));\n  const map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };\n  return map[wd] ?? 0;\n}\n\nfunction ltHour(ts) {\n  const parts = new Intl.DateTimeFormat('en-GB', {\n    timeZone: TZ,\n    hour: '2-digit',\n    hour12: false\n  }).formatToParts(new Date(ts));\n  const hh = parts.find(p => p.type === 'hour')?.value;\n  return Number(hh);\n}\n\nlet ha = global.get('homeassistant') || {};\nlet states =\n  (ha?.homeAssistant?.states) ||\n  (ha?.homeassistant?.states) ||\n  (ha?.states) ||\n  (global.get('homeassistant.homeAssistant.states')) ||\n  {};\n\nconst ENT_CO2 = 'sensor.oro_stotele_carbon_dioxide';\nconst ENT_ALARM = 'alarm_control_panel.home';\n\nlet stCo2 = states[ENT_CO2]?.state;\nlet co2 = parseFloat(stCo2);\n\nif (!isNum(co2)) {\n  node.status({ fill: 'red', shape: 'ring', text: `CO2 invalid: ${stCo2}` });\n  return null;\n}\n\nlet alarm = states[ENT_ALARM]?.state;\nif (alarm === undefined || alarm === null) alarm = '';\nalarm = String(alarm);\n\nconst now = Date.now();\nconst occupied = (alarm === 'disarmed');\nconst dow = ltDow(now);\nconst hour = ltHour(now);\n\nlet logs = flow.get('co2_log');\nif (!Array.isArray(logs)) logs = [];\n\nlogs.push({ ts: now, val: co2, alarm: alarm });\nwhile (logs.length > 1440) logs.shift();\nflow.set('co2_log', logs);\n\nconst first = logs[0];\nconst last = logs[logs.length - 1];\nconst spanHrs = ((last.ts - first.ts) / 3600000);\n\nnode.status({\n  fill: 'green',\n  shape: 'dot',\n  text: `CO2 ${Math.round(co2)} ppm | points ${logs.length} | span ${spanHrs.toFixed(1)}h | alarm ${alarm}`\n});\n\nmsg.payload = {\n  kind: 'co2_sample',\n  ts: now,\n  occupied: occupied,\n  dow: dow,\n  hour: hour,\n  alarm: alarm,\n  co2: Number(co2.toFixed(1))\n};\n\nreturn msg;",
+        "z": "7901ee0f1259f9cf",
+        "name": "Log CO2 Sample",
+        "func": "// ===== CO₂ log kaupimas + learning snapshot record =====\n// - Skaito iš HA global cache\n// - Į flow.co2_log (retention ~10 d) kaupia tik taškus: {ts, val, alarm}\n// - Sugeneruoja įrašą Logging moduliui: msg.log_type='learning', msg.log_record={module,kind,...}\n\nconst TZ = 'Europe/Vilnius';\n\nfunction isBad(v) {\n  if (v === null || v === undefined) return true;\n  const s = String(v).toLowerCase();\n  return (s === 'unknown' || s === 'unavailable' || s === '');\n}\nfunction isNum(v) { return v !== null && v !== undefined && isFinite(v); }\nfunction clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }\n\nfunction ltIso(date) {\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ,\n    year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', second: '2-digit',\n    hour12: false\n  }).format(date).replace(' ', 'T');\n}\nfunction ltDow(date) {\n  return new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(date);\n}\nfunction ltHour(date) {\n  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hour12: false }).format(date));\n}\n\n// ===== HA cache (robust) =====\nlet ha = global.get('homeassistant') || {};\nlet states =\n  (ha?.homeAssistant?.states) ||\n  (ha?.homeassistant?.states) ||\n  (ha?.states) ||\n  {};\n\nconst ENT = {\n  alarm: 'alarm_control_panel.home',\n  co2: 'sensor.oro_stotele_carbon_dioxide',\n  mode: 'sensor.komfovent_logic_2',\n  boost: 'binary_sensor.komfovent_rate_boost_nr',\n  outdoor: 'sensor.boiler_outside_temperature',\n  humidity: 'sensor.bathroom_humidity',\n  fan_actual: 'sensor.intake_fan_level_current',\n  recup: 'switch.start_stop'\n};\n\nconst nowDate = new Date();\nconst ts = ltIso(nowDate);\nconst nowMs = nowDate.getTime();\n\n// Alarm\nconst alarmRaw = states?.[ENT.alarm]?.state;\nlet alarm_state = isBad(alarmRaw) ? (flow.get('alarm_last_known') || null) : String(alarmRaw);\nif (alarm_state) flow.set('alarm_last_known', alarm_state);\n\nconst occupied = (String(alarm_state || '') === 'disarmed');\nconst dow = ltDow(nowDate);\nconst hour = ltHour(nowDate);\n\n// CO2\nconst co2Raw = states?.[ENT.co2]?.state;\nconst co2Val = isBad(co2Raw) ? null : parseFloat(co2Raw);\nif (!isNum(co2Val)) {\n  node.status({ fill: 'red', shape: 'ring', text: `CO2 invalid: ${String(co2Raw)}` });\n  return null;\n}\nconst co2 = Math.round(co2Val);\n\n// Mode (source of truth)\nconst modeRaw = states?.[ENT.mode]?.state;\nlet mode = isBad(modeRaw) ? (flow.get('mode_last_known') || null) : String(modeRaw);\nif (mode) flow.set('mode_last_known', mode);\n\n// Recup ON?\nconst recupIsOn = (String(states?.[ENT.recup]?.state || '').toLowerCase() === 'on');\n\n// Fan actual (0% logic)\nconst fanRaw = states?.[ENT.fan_actual]?.state;\nlet fan_actual = parseFloat(fanRaw);\n\nif (!isFinite(fan_actual)) {\n  fan_actual = null;\n} else if (fan_actual === 0 || recupIsOn === false) {\n  fan_actual = 0;\n} else {\n  fan_actual = clamp(Math.round(fan_actual), 20, 100);\n}\n\n// Boost (internal)\nconst boostRaw = String(states?.[ENT.boost]?.state || '').toLowerCase();\nconst boost_active = (boostRaw === 'on' || boostRaw === 'true');\n\n// Outdoor / Humidity\nconst outdoorRaw = states?.[ENT.outdoor]?.state;\nconst outdoor = isBad(outdoorRaw) ? null : parseFloat(outdoorRaw);\n\nconst humidityRaw = states?.[ENT.humidity]?.state;\nconst humidity = isBad(humidityRaw) ? null : parseFloat(humidityRaw);\n\nconst windows_long_open = !!flow.get('windows_long_open');\n\n// ===== co2_log retention (~10 d) =====\nlet logs = flow.get('co2_log');\nif (!Array.isArray(logs)) logs = [];\n\nlogs.push({ ts: nowMs, val: co2, alarm: String(alarm_state || '') });\n\n// geresnė retention pagal laiką (10 d)\nconst KEEP_MS = 10 * 24 * 60 * 60 * 1000;\nlogs = logs.filter(p => isNum(p?.ts) && (nowMs - p.ts) <= KEEP_MS);\n\nflow.set('co2_log', logs);\n\nnode.status({\n  fill: 'green',\n  shape: 'dot',\n  text: `CO2 ${co2} | pts ${logs.length} | fan ${fan_actual ?? 'n/a'}% | alarm ${alarm_state || ''}`\n});\n\n// ===== record į Logging modulį =====\nmsg.log_type = 'learning';\nmsg.log_record = {\n  module: 'learning',\n  kind: 'snapshot',\n\n  ts,\n  occupied,\n  alarm_state,\n  dow,\n  hour,\n\n  mode: mode,\n\n  // bendras fan laukelis – predictive’ui patogiau\n  fan: (fan_actual === null ? null : fan_actual),\n  co2,\n  rate: null,\n  boost_active,\n  outdoor: isFinite(outdoor) ? Number(outdoor.toFixed(1)) : null,\n  humidity: isFinite(humidity) ? Number(humidity.toFixed(1)) : null,\n  windows_long_open,\n\n  // learning specifika\n  event: 'co2_sample',\n  fan_actual\n};\n\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 520,
-        "y": 120,
+        "x": 430,
+        "y": 100,
         "wires": [
             [
-                "ed0b13e944f8159d",
-                "2b74d735bcfce3d1"
+                "98b56b9dbb7ff1bd",
+                "12dd9ef407ac43d7"
             ]
         ]
     },
     {
-        "id": "ed0b13e944f8159d",
-        "type": "function",
-        "z": "ba9883939fe4270b",
-        "name": "Build Learning JSONL (append)",
-        "func": "// Paruošia JSONL eilutę ir filename (daily).\n// Rašoma į: /data/logs/komfovent/komfovent_learning_YYYY-MM-DD.jsonl\n\nconst TZ = 'Europe/Vilnius';\n\nfunction ltDate(ts) {\n  const parts = new Intl.DateTimeFormat('en-GB', {\n    timeZone: TZ,\n    year: 'numeric',\n    month: '2-digit',\n    day: '2-digit'\n  }).formatToParts(new Date(ts));\n  const get = (t) => parts.find(p => p.type === t)?.value;\n  return `${get('year')}-${get('month')}-${get('day')}`;\n}\n\nconst p = msg.payload || {};\nconst ts = p.ts || Date.now();\nconst date = ltDate(ts);\n\nmsg.filename = `/data/logs/komfovent/komfovent_learning_${date}.jsonl`;\n\n// Užtikrinam, kad logas būtų „predictive-ready“ ir stabilus\nconst lineObj = {\n  ts: ts,\n  occupied: (p.occupied !== undefined ? !!p.occupied : null),\n  dow: (p.dow !== undefined ? p.dow : null),\n  hour: (p.hour !== undefined ? p.hour : null),\n  kind: p.kind || 'event',\n\n  // baziniai\n  alarm: (p.alarm !== undefined ? String(p.alarm) : null),\n  co2: (p.co2 !== undefined ? p.co2 : null),\n\n  // mokymosi rezultatai (jei yra)\n  profile: (p.profile !== undefined ? p.profile : null),\n  avgRate_ppmh: (p.avgRate_ppmh !== undefined ? p.avgRate_ppmh : null),\n  delta: (p.delta !== undefined ? p.delta : null),\n  threshold_prev: (p.threshold_prev !== undefined ? p.threshold_prev : null),\n  threshold_new: (p.threshold_new !== undefined ? p.threshold_new : null),\n  blocked: (p.blocked !== undefined ? !!p.blocked : null),\n  block_reasons: (p.block_reasons !== undefined ? p.block_reasons : null),\n  missing_frac: (p.missing_frac !== undefined ? p.missing_frac : null),\n  points24: (p.points24 !== undefined ? p.points24 : null),\n  pointsProfile: (p.pointsProfile !== undefined ? p.pointsProfile : null)\n};\n\nmsg.payload = JSON.stringify(lineObj) + \"\\n\";\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 820,
-        "y": 120,
-        "wires": [
-            [
-                "4bf238e36c52738e"
-            ]
-        ]
-    },
-    {
-        "id": "4bf238e36c52738e",
-        "type": "file",
-        "z": "ba9883939fe4270b",
-        "name": "Append: learning jsonl",
-        "filename": "filename",
-        "filenameType": "msg",
-        "appendNewline": false,
-        "createDir": true,
-        "overwriteFile": "false",
-        "encoding": "none",
-        "x": 1070,
-        "y": 120,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "2b74d735bcfce3d1",
+        "id": "12dd9ef407ac43d7",
         "type": "debug",
-        "z": "ba9883939fe4270b",
-        "name": "Debug (optional): CO2 sample",
-        "active": false,
+        "z": "7901ee0f1259f9cf",
+        "name": "Debug (optional): learning snapshot",
+        "active": true,
         "tosidebar": true,
         "console": false,
         "tostatus": false,
-        "complete": "payload",
+        "complete": "log_record",
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 530,
-        "y": 180,
+        "x": 340,
+        "y": 160,
         "wires": []
     },
     {
-        "id": "c8db147402919181",
+        "id": "36eb7a4cd99381e7",
         "type": "inject",
-        "z": "ba9883939fe4270b",
+        "z": "7901ee0f1259f9cf",
         "name": "Scheduler: Threshold Update (03:00 LT)",
         "props": [
             {
@@ -130,62 +83,43 @@
         "crontab": "00 03 * * *",
         "once": false,
         "onceDelay": 0.1,
-        "topic": "",
+        "topic": "threshold_update",
         "payload": "",
         "payloadType": "date",
-        "x": 260,
-        "y": 240,
+        "x": 200,
+        "y": 220,
         "wires": [
             [
-                "279ba087344346b8"
+                "3df2171f561b0c8f"
             ]
         ]
     },
     {
-        "id": "279ba087344346b8",
+        "id": "3df2171f561b0c8f",
         "type": "function",
-        "z": "ba9883939fe4270b",
-        "name": "Compute Threshold (Profiles + Guards)",
-        "func": "// ===== CO₂ slenksčio mokymasis =====\n//\n// Adaptacija vykdoma tik kai:\n// - signalizacija = disarmed\n// - nėra GAP_BLOCK (trūksta <=35% tikėtinų taškų 24h)\n// - nėra STABILITY_BLOCK (max>=650 ir range>=100)\n//\n// Profiliai:\n// - Darbo dienos: 06:00–08:00 ir 16:30–23:00 (LT)\n// - Savaitgaliai: pilnos 24h\n//\n// Source of truth:\n// - ankstesnis slenkstis skaitomas iš HA input_number.co2_on_threshold\n// - naujas slenkstis įrašomas į tą patį entity (tik jei pasikeitė)\n// - papildomai išsaugoma global (patogumui kitiems tabams)\n\nconst TZ = 'Europe/Vilnius';\nconst SAMPLE_MIN = 10;\n\nconst STABILITY_MAX_MIN = 650;\nconst STABILITY_RANGE_MIN = 100;\nconst GAP_MISSING_MAX = 0.35;\n\nconst TARGET_RATE = 60;   // ppm/h\nconst K = 0.2;\nconst DELTA_MAX = 25;\n\nconst THRESH_MIN = 550;\nconst THRESH_MAX = 950;\n\nconst ENT_ALARM = 'alarm_control_panel.home';\nconst ENT_THRESH = 'input_number.co2_on_threshold';\n\nfunction isNum(v) { return v !== null && v !== undefined && isFinite(v); }\nfunction clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }\n\nfunction ltParts(ts) {\n  const parts = new Intl.DateTimeFormat('en-GB', {\n    timeZone: TZ,\n    year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit',\n    hour12: false\n  }).formatToParts(new Date(ts));\n  const get = (t) => parts.find(p => p.type === t)?.value;\n  return { hh: Number(get('hour')), mm: Number(get('minute')) };\n}\n\nfunction ltMinutes(ts) {\n  const p = ltParts(ts);\n  return p.hh * 60 + p.mm;\n}\n\nfunction ltDow(ts) {\n  const wd = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(new Date(ts));\n  const map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };\n  return map[wd] ?? 0;\n}\n\nfunction isWeekendLT(ts) {\n  const dow = ltDow(ts);\n  return dow === 0 || dow === 6;\n}\n\nfunction inActiveWindowWeekday(ts) {\n  const m = ltMinutes(ts);\n  return (m >= 360 && m < 480) || (m >= 990 && m < 1380);\n}\n\n// HA cache (alarm + prev threshold)\nlet ha = global.get('homeassistant') || {};\nlet states =\n  (ha?.homeAssistant?.states) ||\n  (ha?.homeassistant?.states) ||\n  (ha?.states) ||\n  (global.get('homeassistant.homeAssistant.states')) ||\n  {};\n\nlet alarm = states[ENT_ALARM]?.state;\nif (alarm === undefined || alarm === null) alarm = '';\nalarm = String(alarm);\n\nconst occupied = (alarm === 'disarmed');\nconst learningBlocked = !occupied;\n\nlet prevRaw = states[ENT_THRESH]?.state;\nlet threshPrev = parseFloat(prevRaw);\nif (!isFinite(threshPrev)) threshPrev = 750;\n\n// DUOMENYS: co2_log (context)\nlet logs = flow.get('co2_log') || [];\nif (!Array.isArray(logs) || logs.length < 2) {\n  node.status({ fill: 'yellow', shape: 'ring', text: 'nepakanka duomenų' });\n  return null;\n}\n\nconst now = Date.now();\nconst start = now - 24 * 60 * 60 * 1000;\n\n// 24h validūs taškai (nepriklausomai nuo alarm) – GAP GUARD\nlet logs24_all = logs.filter(x =>\n  x && isNum(x.ts) && isNum(x.val) && x.ts >= start && x.ts <= now\n);\n\nif (logs24_all.length < 10) {\n  node.status({ fill: 'yellow', shape: 'ring', text: 'per mažai taškų (24h)' });\n  return null;\n}\n\n// 24h tik DISARMED taškai – mokymui\nlet logs24 = logs24_all.filter(x => String(x.alarm) === 'disarmed');\n\nif (logs24.length < 10) {\n  node.status({ fill: 'yellow', shape: 'ring', text: 'per mažai DISARMED taškų (24h)' });\n  return null;\n}\n\n// PROFILIS (\"vakar\" logika)\nconst referenceTs = now - 12 * 60 * 60 * 1000;\nconst weekendProfile = isWeekendLT(referenceTs);\nconst profile = weekendProfile ? 'WEEKEND_24H' : 'WEEKDAY_ACTIVE';\n\nlet logsP = weekendProfile ? logs24 : logs24.filter(p => inActiveWindowWeekday(p.ts));\n\nif (logsP.length < 6) {\n  node.status({ fill: 'yellow', shape: 'ring', text: `profilis ${profile}: per mažai taškų` });\n  return null;\n}\n\n// GAP GUARD (pagal visus valid 24h)\nconst spanMin = (logs24_all[logs24_all.length - 1].ts - logs24_all[0].ts) / 60000;\nconst expected = Math.max(1, Math.round(spanMin / SAMPLE_MIN) + 1);\nconst missingFrac = clamp(1 - (logs24_all.length / expected), 0, 1);\nlet gapBlocked = (missingFrac > GAP_MISSING_MAX);\n\n// STABILITY LOCK (pagal pasirinktą profilį)\nlet minCo2 = Infinity;\nlet maxCo2 = -Infinity;\nfor (const p of logsP) {\n  if (p.val < minCo2) minCo2 = p.val;\n  if (p.val > maxCo2) maxCo2 = p.val;\n}\nconst range = maxCo2 - minCo2;\nlet stabilityBlocked = (maxCo2 < STABILITY_MAX_MIN) || (range < STABILITY_RANGE_MIN);\n\n// AVG RISING RATE (ppm/h)\nlet sumRate = 0;\nlet cnt = 0;\nlet skippedGaps = 0;\n\nfor (let i = 1; i < logsP.length; i++) {\n  let dtMin = (logsP[i].ts - logsP[i - 1].ts) / 60000;\n  if (dtMin <= 0 || dtMin > 20) {\n    skippedGaps++;\n    continue;\n  }\n  let dCo2 = logsP[i].val - logsP[i - 1].val;\n  if (dCo2 > 0) {\n    sumRate += (dCo2 / dtMin) * 60;\n    cnt++;\n  }\n}\n\nlet avgRate = cnt ? (sumRate / cnt) : 0;\n\n// Proporcinė adaptacija\nlet difference = avgRate - TARGET_RATE;\nlet delta = -Math.round(difference * K);\ndelta = clamp(delta, -DELTA_MAX, DELTA_MAX);\n\nlet blocked = gapBlocked || stabilityBlocked || learningBlocked;\nlet thresh = threshPrev;\n\nif (!blocked) {\n  thresh = Math.round(threshPrev + delta);\n  thresh = clamp(thresh, THRESH_MIN, THRESH_MAX);\n} else {\n  delta = 0;\n}\n\n// Išsaugojimas global – patogu kitiems tabams\n// (paliekam abu raktus, kad nesulaužytų senesni moduliai)\nglobal.set('komfovent.auto_co2_on_threshold', thresh);\nglobal.set('auto_co2_on_threshold', thresh);\n\n// Status\nlet statusBits = [];\nstatusBits.push(profile);\nstatusBits.push(`avg ${avgRate.toFixed(1)} ppm/h`);\nstatusBits.push(`delta ${delta}`);\nstatusBits.push(`thr ${Math.round(threshPrev)}->${Math.round(thresh)}`);\nstatusBits.push(`miss ${(missingFrac * 100).toFixed(0)}%`);\n\nif (gapBlocked) statusBits.push('GAP_BLOCK');\nif (stabilityBlocked) statusBits.push('STABILITY_BLOCK');\nif (learningBlocked) statusBits.push('ALARM_BLOCK');\n\nnode.status({\n  fill: blocked ? 'yellow' : 'green',\n  shape: blocked ? 'ring' : 'dot',\n  text: statusBits.join(' | ')\n});\n\n// Output payload'ui (JSONL logui)\nconst dow = ltDow(now);\nconst hour = ltParts(now).hh;\n\n// ar realiai pasikeitė slenkstis?\nconst threshold_changed = (!blocked) && (Math.round(thresh) !== Math.round(threshPrev));\nmsg.threshold_changed = threshold_changed;\n\n// JSONL event'as visada (net jei blocked) – audito tikslais\nmsg.payload = {\n  kind: 'threshold_update',\n  ts: now,\n  occupied: occupied,\n  dow: dow,\n  hour: hour,\n  alarm: alarm,\n  profile: profile,\n  avgRate_ppmh: Number(avgRate.toFixed(2)),\n  delta: delta,\n  threshold_prev: Math.round(threshPrev),\n  threshold_new: Math.round(thresh),\n  blocked: blocked,\n  block_reasons: { gapBlocked: gapBlocked, stabilityBlocked: stabilityBlocked, learningBlocked: learningBlocked },\n  missing_frac: Number(missingFrac.toFixed(4)),\n  points24: logs24_all.length,\n  pointsProfile: logsP.length,\n  debug: { skippedGaps: skippedGaps }\n};\n\n// HA write tik jei pasikeitė ir nėra blokų\nmsg.ha = threshold_changed ? { entity_id: ENT_THRESH, value: Math.round(thresh) } : null;\n\nreturn msg;",
+        "z": "7901ee0f1259f9cf",
+        "name": "Compute Threshold & Guards",
+        "func": "/*************************************************\n * CO₂ THRESHOLD COMPUTE (v4.3.0 GOLD - STEP 1)\n * - Step 1 (HA input_number priima integer step=1)\n * - Apsaugos: ALARM / GAP / STABILITY\n * - Logging per Logging modulį: msg.log_type='learning', msg.log_record=object\n * - Standartai:\n *   • schema_ver ir flow_ver nehardcodinam (ateina per Logging Normalize Record)\n *   • ts – LT ISO su sekundėmis (sv-SE + Europe/Vilnius), kaip kituose loguose\n *   • visada pridedam module/kind, dow/hour, alarm_state, mode (jei turim)\n *************************************************/\n\nconst TZ = 'Europe/Vilnius';\n\nconst SAMPLE_MIN = 10;\nconst STABILITY_MAX_MIN = 650;\nconst STABILITY_RANGE_MIN = 100;\nconst GAP_MISSING_MAX = 0.35;\n\nconst TARGET_RATE = 60;   // ppm/h\nconst K = 0.2;\nconst DELTA_MAX = 25;\n\nconst THRESH_MIN = 400;\nconst THRESH_MAX = 1200;\n\nconst ENT = {\n  alarm: 'alarm_control_panel.home',\n  thresh: 'input_number.co2_on_threshold',\n  mode: 'sensor.komfovent_logic_2' // source of truth (jei egzistuoja)\n};\n\nfunction isBad(v) {\n  if (v === null || v === undefined) return true;\n  const s = String(v).toLowerCase();\n  return (s === 'unknown' || s === 'unavailable' || s === '');\n}\nfunction isNum(v) { return v !== null && v !== undefined && isFinite(v); }\nfunction clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }\n\nfunction ltIso(date) {\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ,\n    year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', second: '2-digit',\n    hour12: false\n  }).format(date).replace(' ', 'T');\n}\nfunction ltDow(date) {\n  return new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(date);\n}\nfunction ltHour(date) {\n  return Number(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hour12: false }).format(date));\n}\n\n// ===== HA global cache (robust) =====\nlet ha = global.get('homeassistant') || {};\nlet states =\n  (ha?.homeAssistant?.states) ||\n  (ha?.homeassistant?.states) ||\n  (ha?.states) ||\n  {};\n\n// ===== Alarm / occupied =====\nconst alarmRaw = states?.[ENT.alarm]?.state;\nlet alarm = isBad(alarmRaw) ? (flow.get('alarm_last_known') || null) : String(alarmRaw);\nif (alarm) flow.set('alarm_last_known', alarm);\n\nconst occupied = (String(alarm || '') === 'disarmed');\nconst learningBlocked = !occupied;\n\n// ===== Mode (optional, bet naudinga logams) =====\nconst modeRaw = states?.[ENT.mode]?.state;\nlet mode = isBad(modeRaw) ? (flow.get('mode_last_known') || null) : String(modeRaw);\nif (mode) flow.set('mode_last_known', mode);\n\n// ===== Threshold prev =====\nlet threshPrev = parseFloat(states?.[ENT.thresh]?.state);\nif (!isFinite(threshPrev)) threshPrev = 750;\n\n// ===== 24h duomenys =====\nconst nowDate = new Date();\nconst nowMs = nowDate.getTime();\n\nlet logs = flow.get('co2_log');\nif (!Array.isArray(logs)) logs = [];\n\nconst logs24_all = logs.filter(x => isNum(x?.ts) && isNum(x?.val) && x.ts >= (nowMs - 86400000));\nif (logs24_all.length < 10) {\n  node.status({ fill: 'yellow', shape: 'ring', text: `learning skip: logs24_all=${logs24_all.length}` });\n  return null;\n}\n\n// mokomės tik iš disarmed taškų\nconst logs24 = logs24_all.filter(x => String(x?.alarm || '') === 'disarmed');\n\n// jei disarmed taškų beveik nėra, stability skaičiavimai būtų klaidingi\nif (logs24.length < 2) {\n  const tsLT = ltIso(nowDate);\n  const recSkip = {\n    module: 'learning',\n    kind: 'learning_update',\n    ts: tsLT,\n    occupied,\n    alarm_state: alarm,\n    dow: ltDow(nowDate),\n    hour: ltHour(nowDate),\n\n    mode: mode,\n\n    // diagnostika\n    threshold_prev: Math.round(threshPrev),\n    threshold_new: Math.round(threshPrev),\n    delta: 0,\n\n    avgRate_ppmh: 0,\n    missing_frac: Number(clamp(1 - (logs24_all.length / Math.round(1440 / SAMPLE_MIN)), 0, 1).toFixed(2)),\n    blocked: true,\n    block_reasons: { learningBlocked, gapBlocked: false, stabilityBlocked: false, too_few_disarmed_points: true }\n  };\n\n  flow.set('learning_last_update', recSkip);\n  msg.log_type = 'learning';\n  msg.log_record = recSkip;\n  msg.threshold_changed = false;\n  msg.ha = null;\n\n  node.status({ fill: 'yellow', shape: 'dot', text: 'learning blocked: too few disarmed points' });\n  return msg;\n}\n\n// ===== 2. GAP GUARD =====\nconst expected = Math.round(1440 / SAMPLE_MIN);\nconst missingFrac = clamp(1 - (logs24_all.length / expected), 0, 1);\nconst gapBlocked = (missingFrac > GAP_MISSING_MAX);\n\n// ===== 3. STABILITY GUARD =====\nconst vals = logs24.map(l => l.val);\nconst minCo2 = Math.min(...vals);\nconst maxCo2 = Math.max(...vals);\nconst stabilityBlocked = (maxCo2 < STABILITY_MAX_MIN) || ((maxCo2 - minCo2) < STABILITY_RANGE_MIN);\n\n// ===== 4. CO2 kilimo tempas (ppm/h) =====\nlet sumRate = 0;\nlet cnt = 0;\n\nfor (let i = 1; i < logs24.length; i++) {\n  const dtMin = (logs24[i].ts - logs24[i - 1].ts) / 60000;\n  if (dtMin > 0 && dtMin <= 20) {\n    const dCo2 = logs24[i].val - logs24[i - 1].val;\n    if (dCo2 > 0) {\n      // ppm/h\n      sumRate += (dCo2 / dtMin) * 60;\n      cnt++;\n    }\n  }\n}\n\nconst avgRate = cnt ? (sumRate / cnt) : 0;\n\n// delta: ribojam +/- DELTA_MAX, kad nebūtų šuolių\nlet delta = -Math.round((avgRate - TARGET_RATE) * K);\ndelta = clamp(delta, -DELTA_MAX, DELTA_MAX);\n\nconst blocked = gapBlocked || stabilityBlocked || learningBlocked;\n\n// ===== 5. Naujas slenkstis (step=1) =====\nconst prevRounded = Math.round(threshPrev);\nconst threshNew = blocked\n  ? prevRounded\n  : clamp(Math.round(prevRounded + delta), THRESH_MIN, THRESH_MAX);\n\n// ===== 6. Išvestis HA mazgui =====\nmsg.threshold_changed = (prevRounded !== threshNew);\nmsg.ha = msg.threshold_changed ? { entity_id: ENT.thresh, value: threshNew } : null;\n\n// ===== 7. Unified log record (į Logging modulį) =====\nconst tsLT = ltIso(nowDate);\n\nconst rec = {\n  module: 'learning',\n  kind: 'learning_update',\n\n  ts: tsLT,\n  occupied,\n  alarm_state: alarm,\n  dow: ltDow(nowDate),\n  hour: ltHour(nowDate),\n\n  mode: mode,\n\n  avgRate_ppmh: Number(avgRate.toFixed(1)),\n  missing_frac: Number(missingFrac.toFixed(2)),\n\n  threshold_prev: prevRounded,\n  threshold_new: threshNew,\n  delta: (msg.threshold_changed ? (threshNew - prevRounded) : 0),\n\n  blocked,\n  block_reasons: {\n    learningBlocked,\n    gapBlocked,\n    stabilityBlocked\n  },\n\n  // naudinga diagnostika (neprivaloma predictive, bet praverčia)\n  stability_min: minCo2,\n  stability_max: maxCo2,\n  points_all_24h: logs24_all.length,\n  points_disarmed_24h: logs24.length\n};\n\nflow.set('learning_last_update', rec);\nmsg.log_record = rec;\nmsg.log_type = 'learning';\n\nnode.status({\n  fill: blocked ? 'yellow' : (msg.threshold_changed ? 'green' : 'blue'),\n  shape: 'dot',\n  text: `delta ${rec.delta} | thr ${threshNew} | miss ${(missingFrac * 100).toFixed(0)}%`\n});\n\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 610,
-        "y": 240,
+        "x": 530,
+        "y": 220,
         "wires": [
             [
-                "554f364405faadbb",
-                "8397a434ed153a0f"
+                "98b56b9dbb7ff1bd",
+                "bdff16d6c8b44e6e",
+                "gemini_shadow_logic"
             ]
         ]
     },
     {
-        "id": "554f364405faadbb",
-        "type": "function",
-        "z": "ba9883939fe4270b",
-        "name": "Tap: Threshold Log → JSONL",
-        "func": "// JSONL rašom VISADA (threshold_update), net jei blocked.\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 930,
-        "y": 240,
-        "wires": [
-            [
-                "ed0b13e944f8159d"
-            ]
-        ]
-    },
-    {
-        "id": "8397a434ed153a0f",
+        "id": "bdff16d6c8b44e6e",
         "type": "switch",
-        "z": "ba9883939fe4270b",
+        "z": "7901ee0f1259f9cf",
         "name": "HA Gate: Only When Changed",
         "property": "threshold_changed",
         "propertyType": "msg",
@@ -197,50 +131,31 @@
         "checkall": "true",
         "repair": false,
         "outputs": 1,
-        "x": 920,
-        "y": 300,
+        "x": 850,
+        "y": 220,
         "wires": [
             [
-                "12f1e0f705e1c62e",
-                "a4c0dee9e727b315"
+                "06f76d3d342e4557"
             ]
         ]
     },
     {
-        "id": "a4c0dee9e727b315",
-        "type": "function",
-        "z": "ba9883939fe4270b",
-        "name": "Build threshold_changed → JSONL",
-        "func": "// Atskiras eventas tik tada, kai threshold realiai pasikeitė\nif (msg.threshold_changed !== true) return null;\n\nconst p = msg.payload || {};\n\nmsg.payload = {\n  kind: 'threshold_changed',\n  ts: p.ts,\n  occupied: p.occupied,\n  dow: p.dow,\n  hour: p.hour,\n  alarm: p.alarm,\n  profile: p.profile,\n  threshold_prev: p.threshold_prev,\n  threshold_new: p.threshold_new,\n  delta: p.delta\n};\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": 0,
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 1280,
-        "y": 200,
-        "wires": [
-            [
-                "ed0b13e944f8159d"
-            ]
-        ]
-    },
-    {
-        "id": "12f1e0f705e1c62e",
+        "id": "06f76d3d342e4557",
         "type": "api-call-service",
-        "z": "ba9883939fe4270b",
+        "z": "7901ee0f1259f9cf",
         "name": "HA Call: input_number.set_value",
         "server": "de0e06cd.8456e8",
         "version": 7,
         "debugenabled": false,
-        "action": "",
+        "action": "input_number.set_value",
         "floorId": [],
         "areaId": [],
         "deviceId": [],
-        "entityId": [],
+        "entityId": [
+            "input_number.co2_on_threshold"
+        ],
         "labelId": [],
-        "data": "{\"entity_id\":\"{{ha.entity_id}}\",\"value\":{{ha.value}}}",
+        "data": "{\"value\": {{ha.value}}}",
         "dataType": "json",
         "mergeContext": "",
         "mustacheAltTags": false,
@@ -249,10 +164,156 @@
         "blockInputOverrides": false,
         "domain": "input_number",
         "service": "set_value",
-        "x": 1290,
-        "y": 260,
+        "x": 1150,
+        "y": 220,
         "wires": [
             []
+        ]
+    },
+    {
+        "id": "98b56b9dbb7ff1bd",
+        "type": "function",
+        "z": "7901ee0f1259f9cf",
+        "name": "Build Learning Log Record",
+        "func": "// Build Learning Log Record -> forwarding į Logging modulį.\n// Nerašo į failą čia.\n// Output:\n// - msg.log_type = 'learning'\n// - msg.log_record = object (be filename/payload)\n\nconst TZ = 'Europe/Vilnius';\n\nfunction ltIso(date) {\n    return new Intl.DateTimeFormat('sv-SE', {\n        timeZone: TZ,\n        year: 'numeric', month: '2-digit', day: '2-digit',\n        hour: '2-digit', minute: '2-digit', second: '2-digit',\n        hour12: false\n    }).format(date).replace(' ', 'T');\n}\n\nconst rec = msg.log_record;\nif (!rec || typeof rec !== 'object') return null;\n\n// Užtikrinam log_type (kad upstream netyčia nepakeistų)\nmsg.log_type = 'learning';\n\n// Minimalus ts fallback (jei upstream jo nepadavė)\nif (!rec.ts || typeof rec.ts !== 'string' || rec.ts.length < 10) {\n    rec.ts = ltIso(new Date());\n}\n\nmsg.log_record = rec;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 700,
+        "y": 100,
+        "wires": [
+            [
+                "4d4e8058983f4673"
+            ]
+        ]
+    },
+    {
+        "id": "c286335cc8b40d68",
+        "type": "link in",
+        "z": "7901ee0f1259f9cf",
+        "name": "AI In: Learning",
+        "links": [
+            "567de76b7fee6e80"
+        ],
+        "x": 95,
+        "y": 280,
+        "wires": [
+            [
+                "cf91b3acb12da085"
+            ]
+        ]
+    },
+    {
+        "id": "cf91b3acb12da085",
+        "type": "function",
+        "z": "7901ee0f1259f9cf",
+        "name": "AI Handler (Learning)",
+        "func": "const text = String(msg.text || msg?.payload?.text || '').trim();\nconst t = text.toLowerCase();\n\nlet ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\n\n// 1. Slenksčio nustatymas\nconst TH_ENT = 'input_number.co2_on_threshold';\nlet th = parseFloat(states?.[TH_ENT]?.state);\nif (!isFinite(th)) th = Number(global.get('komfovent.auto_co2_on_threshold') || 0) || null;\n\n// 2. Mokymosi duomenys\nconst last = flow.get('learning_last_update') || null;\nconst windows_open = !!flow.get('windows_long_open'); // Papildoma informacija\n\nfunction fmtLast(u) {\n  if (!u) return 'Mokymosi įrašų dar nėra (laukite 03:00 val. analizės).';\n  let s = `📊 Paskutinė analizė: ${u.ts}.\\n`;\n\n  if (u.blocked) {\n    const br = u.block_reasons || {};\n    let why = [];\n    if (br.learningBlocked) why.push('Įjungta signalizacija (Armed)');\n    if (br.gapBlocked) why.push('Trūko duomenų taškų (>35%)');\n    if (br.stabilityBlocked) why.push('CO2 lygis buvo per stabilus');\n    s += `❌ Blokuota: ${why.join(', ') || 'nežinoma priežastis'}.`;\n  } else {\n    s += `✅ Slenkstis pakoreguotas: ${u.threshold_prev} → ${u.threshold_new} ppm (pokytis ${u.delta}).`;\n  }\n  s += `\\n📅 Profilis: ${u.profile}. Duomenų trūkumas: ${(Number(u.missing_frac || 0) * 100).toFixed(0)}%.`;\n  return s;\n}\n\nlet reply = null;\n\nif (!t) reply = 'Pasiteirauk: \"koks slenkstis\", \"kas su mokymusi\" arba \"profilis\".';\nelse if (t.includes('slenkst') || t.includes('threshold')) {\n  reply = th === null ? 'CO2 slenksčio reikšmės HA nerandu.' : `📍 Dabartinis CO₂ įjungimo slenkstis: ${Math.round(th)} ppm.`;\n}\nelse if (t.includes('mokym') || t.includes('learning') || t.includes('kodel') || t.includes('kodėl')) {\n  reply = fmtLast(last);\n  if (windows_open && last?.blocked) reply += '\\n⚠️ Pastebėta: langai buvo ilgai atviri, tai galėjo turėti įtakos.';\n}\nelse if (t.includes('profil')) {\n  reply = last ? `📋 Aktyvus mokymosi profilis: ${last.profile}.` : 'Profilio duomenų dar nėra.';\n}\nelse if (t.includes('miss') || t.includes('truk') || t.includes('trūk')) {\n  reply = last ? `📉 Duomenų trūkumas analizės metu: ${(Number(last.missing_frac || 0) * 100).toFixed(0)}%.` : 'Duomenų trūkumo statistikos nėra.';\n}\nelse {\n  reply = 'Auto-Learning modulis atsako į: \"slenkstis\", \"mokymasis\", \"profilis\", \"trūkumas\".';\n}\n\nmsg.ai_reply = true;\nmsg.payload = reply;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 340,
+        "y": 280,
+        "wires": [
+            [
+                "db629847ce4e6de4"
+            ]
+        ]
+    },
+    {
+        "id": "db629847ce4e6de4",
+        "type": "link out",
+        "z": "7901ee0f1259f9cf",
+        "name": "AI Out: Reply",
+        "mode": "link",
+        "links": [
+            "2c73cea35fecb95c"
+        ],
+        "x": 995,
+        "y": 280,
+        "wires": []
+    },
+    {
+        "id": "4d4e8058983f4673",
+        "type": "link out",
+        "z": "7901ee0f1259f9cf",
+        "name": "link out 1",
+        "mode": "link",
+        "links": [
+            "b94f8a643031659c"
+        ],
+        "x": 865,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "gemini_shadow_logic",
+        "type": "function",
+        "z": "7901ee0f1259f9cf",
+        "name": "Gemini Shadow Analysis",
+        "func": "/*************************************************\n * GEMINI SHADOW ANALYSIS\n *************************************************/\n\nconst logs = flow.get('co2_log') || [];\nconst lastUpdate = flow.get('learning_last_update') || {};\nconst API_KEY = (typeof env !== 'undefined' && env.get) ? env.get('GEMINI_API_KEY') : null;\nconst key = API_KEY || flow.get('GEMINI_API_KEY');\n\nif (!key) {\n    node.error(\"GEMINI_API_KEY nerastas!\");\n    return null;\n}\n\n// Paruošiame duomenis kompaktiškumui\nconst compactLogs = logs.filter((_, i) => i % 2 === 0).map(p => ({\n    t: new Date(p.ts).toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' }),\n    v: p.val\n}));\n\n// Suformuojame užklausą (sutvarkytos kabutės pabaigoje)\nconst prompt = `Esi namų vėdinimo ekspertas. Peržiūrėk CO2 logus: ${JSON.stringify(compactLogs)}\n\nMatematinis algoritmas siūlo: ${lastUpdate.threshold_new} ppm.\nSenas slenkstis buvo: ${lastUpdate.threshold_prev} ppm.\n\nUŽDUOTIS:\n1. Pateik savo rekomendaciją (skaičių).\n2. Trumpai (1-2 sakiniais) paaiškink kodėl, nurodydamas skirtumą nuo matematinio skaičiavimo.\n3. Rašyk lietuviškai, draugiškai, bet labai konkrečiai. Nevartok jokių įžangų, punktų ar sąrašų.`;\n\nmsg.url = \"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=\" + key;\nmsg.payload = {\n    contents: [{ parts: [{ text: prompt }] }],\n    generationConfig: {\n        temperature: 0.6,\n        maxOutputTokens: 300\n    }\n};\n\nnode.status({ fill: \"blue\", shape: \"dot\", text: \"Siunčiama Gemini 2.0...\" });\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 430,
+        "y": 360,
+        "wires": [
+            [
+                "gemini_api_call"
+            ]
+        ]
+    },
+    {
+        "id": "gemini_api_call",
+        "type": "http request",
+        "z": "7901ee0f1259f9cf",
+        "name": "Gemini API Call",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 720,
+        "y": 360,
+        "wires": [
+            [
+                "shadow_handler"
+            ]
+        ]
+    },
+    {
+        "id": "shadow_handler",
+        "type": "function",
+        "z": "7901ee0f1259f9cf",
+        "name": "Shadow Result Handler",
+        "func": "// Shadow Result Handler (v4.3.1)\nconst lastUpdate = flow.get('learning_last_update') || {};\n\n// Ištraukiame tekstą iš Gemini atsakymo struktūros\nlet aiResponse = \"Nepavyko gauti atsakymo.\";\nif (msg.payload && msg.payload.candidates && msg.payload.candidates[0].content) {\n    aiResponse = msg.payload.candidates[0].content.parts[0].text;\n} else if (msg.payload && msg.payload.error) {\n    aiResponse = \"API Klaida: \" + msg.payload.error.message;\n}\n\n// Išsaugojam rekomendaciją ateičiai\nflow.set('gemini_shadow_recommendation', aiResponse);\n\n// Suformuojam pilną žinutę su AI argumentais\nmsg.payload = `🤖 **Gemini Šešėlinė Analizė**\\n` +\n    `🔢 Matematinis algoritmas: ${lastUpdate.threshold_new || 'n/a'} ppm\\n\\n` +\n    `${aiResponse}`;\n\nnode.status({ fill: \"green\", shape: \"dot\", text: \"Rekomendacija išsiųsta\" });\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 950,
+        "y": 360,
+        "wires": [
+            [
+                "db629847ce4e6de4"
+            ]
         ]
     },
     {
@@ -286,7 +347,7 @@
         "enableGlobalContextStore": true
     },
     {
-        "id": "aae97ae05e107f2b",
+        "id": "3870b9267924602f",
         "type": "global-config",
         "env": [],
         "modules": {

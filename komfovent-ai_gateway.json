@@ -1,0 +1,564 @@
+[
+    {
+        "id": "8e4fe2eda5888688",
+        "type": "tab",
+        "label": "Komfovent: Module - AI Gateway",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "98016141e13116ae",
+        "type": "telegram receiver",
+        "z": "8e4fe2eda5888688",
+        "name": "Telegram In",
+        "bot": "tg_bot_cfg_komfovent",
+        "saveDataDir": "",
+        "filterCommands": false,
+        "hasinput": false,
+        "inputs": 0,
+        "handleallupdates": false,
+        "x": 120,
+        "y": 100,
+        "wires": [
+            [
+                "0fef73201f0874fd"
+            ],
+            []
+        ]
+    },
+    {
+        "id": "0fef73201f0874fd",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "ID Filter & Text Prep",
+        "func": "const ALLOWED = Number(env.get(\"MY_TELEGRAM_ID\")) || global.get(\"ALLOWED_TELEGRAM_ID\");\nconst chatId = msg.payload?.chatId;\n\nif (chatId !== ALLOWED) {\n  node.status({ fill: \"red\", shape: \"ring\", text: \"Blokuota: \" + chatId });\n  return null;\n}\n\nmsg.user_text = String(msg.payload?.content || \"\").trim();\nmsg.chatId = chatId;\n\nnode.status({ fill: \"green\", shape: \"dot\", text: \"Vartotojas OK\" });\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 360,
+        "y": 100,
+        "wires": [
+            [
+                "a50a0fdcbc0bef7b"
+            ]
+        ]
+    },
+    {
+        "id": "a50a0fdcbc0bef7b",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Classify (slash only)",
+        "func": "const t = (msg.user_text || '').trim();\nconst tl = t.toLowerCase();\n\n// Visi quick statusai tik su / (kad 'co2' netaptų statusu)\nlet intent = 'ai';\n\nif (tl === '/start' || tl === '/help' || tl === '/h') intent = 'help';\nelse if (tl === '/status') intent = 'status';\nelse if (tl === '/co2') intent = 'co2';\nelse if (tl === '/fan') intent = 'fan';\nelse if (tl === '/mode') intent = 'mode';\nelse if (tl === '/boost') intent = 'boost';\nelse if (tl === '/humidity') intent = 'humidity';\nelse if (tl === '/outdoor') intent = 'outdoor';\n\nmsg.intent = intent;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 610,
+        "y": 100,
+        "wires": [
+            [
+                "8a99dda622ad0827"
+            ]
+        ]
+    },
+    {
+        "id": "8a99dda622ad0827",
+        "type": "switch",
+        "z": "8e4fe2eda5888688",
+        "name": "Route intent",
+        "property": "intent",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "eq",
+                "v": "help",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "status",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "co2",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "fan",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "mode",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "boost",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "humidity",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "outdoor",
+                "vt": "str"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "false",
+        "repair": false,
+        "outputs": 9,
+        "x": 130,
+        "y": 260,
+        "wires": [
+            [
+                "2eeb0466849204e1"
+            ],
+            [
+                "e3d278f60536fd9a"
+            ],
+            [
+                "b84df77aa2da338b"
+            ],
+            [
+                "229a694dd09ee7bf"
+            ],
+            [
+                "4fc293b2c5491c15"
+            ],
+            [
+                "96f187848d8265a5"
+            ],
+            [
+                "0f5a16a27ea026ce"
+            ],
+            [
+                "6bf4d7426e46a7c4"
+            ],
+            [
+                "1d2cc3a20712209c",
+                "567de76b7fee6e80"
+            ]
+        ]
+    },
+    {
+        "id": "2eeb0466849204e1",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Reply: Help",
+        "func": "msg.payload = {\n  chatId: msg.chatId,\n  type: 'message',\n  content: [\n    'Komfovent AI Gateway',\n    '',\n    'Komandos (tik su /):',\n    '/status /co2 /fan /mode /boost /humidity /outdoor',\n    '',\n    'Visa kita – laisvas klausimas ir keliauja į AI (pvz.:',\n    '\"kodėl fan 45% jei naktis?\" arba \"paaiškink boost logiką\").'\n  ].join('\\n')\n};\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 330,
+        "y": 200,
+        "wires": [
+            [
+                "3b5646a6b3bbfec3"
+            ]
+        ]
+    },
+    {
+        "id": "e3d278f60536fd9a",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Reply: Status",
+        "func": "let ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\n\nfunction isBad(v){ if (v===null||v===undefined) return true; const s=String(v).toLowerCase(); return s==='unknown'||s==='unavailable'; }\nfunction num(ent){ const raw=states?.[ent]?.state; if (isBad(raw)) return null; const v=parseFloat(raw); return isFinite(v)?v:null; }\nfunction str(ent){ const raw=states?.[ent]?.state; if (isBad(raw)) return null; return String(raw); }\nfunction bool(ent){ const raw=String(states?.[ent]?.state||'').toLowerCase(); if(raw==='on'||raw==='true') return true; if(raw==='off'||raw==='false') return false; return null; }\n\nconst co2=num('sensor.oro_stotele_carbon_dioxide');\nconst mode=str('sensor.komfovent_logic_2');\nconst fanA=num('sensor.intake_fan_level_current');\nconst fanD=num('number.intake_level_1');\nconst boost = bool('binary_sensor.komfovent_rate_boost_nr');\nconst hum=num('sensor.bathroom_humidity');\nconst out=num('sensor.boiler_outside_temperature');\n\nconst lines=[];\nlines.push(`CO₂: ${co2!==null?Math.round(co2)+' ppm':'n/a'}`);\nlines.push(`Režimas: ${mode||'n/a'}`);\nlines.push(`Fan: actual ${fanA!==null?Math.round(fanA)+'%':'n/a'} | desired ${fanD!==null?Math.round(fanD)+'%':'n/a'}`);\nlines.push(`Boost: ${boost===null?'n/a':(boost?'ON':'OFF')}`);\nlines.push(`Drėgmė: ${hum!==null?hum.toFixed(1)+'%':'n/a'}`);\nlines.push(`Lauke: ${out!==null?out.toFixed(1)+'°C':'n/a'}`);\n\nmsg.payload = { chatId: msg.chatId, type: 'message', content: lines.join('\\n') };\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 330,
+        "y": 240,
+        "wires": [
+            [
+                "3b5646a6b3bbfec3"
+            ]
+        ]
+    },
+    {
+        "id": "b84df77aa2da338b",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Reply: /co2",
+        "func": "let ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\nconst raw = states?.['sensor.oro_stotele_carbon_dioxide']?.state;\nconst v = parseFloat(raw);\nmsg.payload = { chatId: msg.chatId, type: 'message', content: isFinite(v) ? `Dabar CO₂: ${Math.round(v)} ppm` : `CO₂ nuskaito blogai: ${raw}` };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 330,
+        "y": 300,
+        "wires": [
+            [
+                "3b5646a6b3bbfec3"
+            ]
+        ]
+    },
+    {
+        "id": "229a694dd09ee7bf",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Reply: /fan",
+        "func": "let ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\nconst a = parseFloat(states?.['sensor.intake_fan_level_current']?.state);\nconst d = parseFloat(states?.['number.intake_level_1']?.state);\nconst aTxt = isFinite(a) ? Math.round(a)+'%' : 'n/a';\nconst dTxt = isFinite(d) ? Math.round(d)+'%' : 'n/a';\nmsg.payload = { chatId: msg.chatId, type: 'message', content: `Fan: actual ${aTxt} | desired ${dTxt}` };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 330,
+        "y": 340,
+        "wires": [
+            [
+                "3b5646a6b3bbfec3"
+            ]
+        ]
+    },
+    {
+        "id": "4fc293b2c5491c15",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Reply: /mode",
+        "func": "let ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\nconst m = states?.['sensor.komfovent_logic_2']?.state;\nmsg.payload = { chatId: msg.chatId, type: 'message', content: `Režimas: ${m || 'n/a'}` };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 330,
+        "y": 380,
+        "wires": [
+            [
+                "3b5646a6b3bbfec3"
+            ]
+        ]
+    },
+    {
+        "id": "96f187848d8265a5",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Reply: /boost",
+        "func": "let ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\nconst raw = String(states?.['binary_sensor.komfovent_rate_boost_nr']?.state || '').toLowerCase();\nlet v = null;\nif (raw === 'on' || raw === 'true') v = true;\nelse if (raw === 'off' || raw === 'false') v = false;\nmsg.payload = { chatId: msg.chatId, type: 'message', content: (v===null) ? `Boost būklė n/a (${raw})` : (v ? 'Boost: ON' : 'Boost: OFF') };\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 330,
+        "y": 420,
+        "wires": [
+            [
+                "3b5646a6b3bbfec3"
+            ]
+        ]
+    },
+    {
+        "id": "0f5a16a27ea026ce",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Reply: /humidity",
+        "func": "let ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\nconst v = parseFloat(states?.['sensor.bathroom_humidity']?.state);\nmsg.payload = { chatId: msg.chatId, type: 'message', content: isFinite(v) ? `Vonios drėgmė: ${v.toFixed(1)}%` : 'Vonios drėgmė: n/a' };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 340,
+        "y": 460,
+        "wires": [
+            [
+                "3b5646a6b3bbfec3"
+            ]
+        ]
+    },
+    {
+        "id": "6bf4d7426e46a7c4",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Reply: /outdoor",
+        "func": "let ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\nconst v = parseFloat(states?.['sensor.boiler_outside_temperature']?.state);\nmsg.payload = { chatId: msg.chatId, type: 'message', content: isFinite(v) ? `Lauko temperatūra: ${v.toFixed(1)}°C` : 'Lauko temperatūra: n/a' };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 340,
+        "y": 500,
+        "wires": [
+            [
+                "3b5646a6b3bbfec3"
+            ]
+        ]
+    },
+    {
+        "id": "1d2cc3a20712209c",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Build AI context (paths)",
+        "func": "const TZ = 'Europe/Vilnius';\nfunction ltDate(d){\n  return new Intl.DateTimeFormat('sv-SE', { timeZone: TZ, year:'numeric', month:'2-digit', day:'2-digit' }).format(d);\n}\nconst day = ltDate(new Date());\nmsg._logPaths = {\n  telemetry: `/data/logs/komfovent/komfovent_telemetry_${day}.jsonl`,\n  control: `/data/logs/komfovent/komfovent_control_${day}.jsonl`\n};\n\n// Papildomas Control kontekstas gaunamas per link (jei sujungta)\nmsg.control_context_last = flow.get('control_context_last') || null;\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 370,
+        "y": 580,
+        "wires": [
+            [
+                "5c3f116273e2bc12"
+            ]
+        ]
+    },
+    {
+        "id": "5c3f116273e2bc12",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Tail telemetry cmd",
+        "func": "const p = msg._logPaths || {};\nmsg.payload = `tail -n 25 ${p.telemetry} 2>/dev/null || true`;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 620,
+        "y": 580,
+        "wires": [
+            [
+                "e17bd67575a09940"
+            ]
+        ]
+    },
+    {
+        "id": "e17bd67575a09940",
+        "type": "exec",
+        "z": "8e4fe2eda5888688",
+        "command": "",
+        "addpay": true,
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "oldrc": false,
+        "name": "Exec: tail telemetry (stdout only)",
+        "x": 900,
+        "y": 580,
+        "wires": [
+            [
+                "10a368fe2c439abf"
+            ],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "10a368fe2c439abf",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Capture telemetry → tail control",
+        "func": "let out = msg.payload;\nif (Buffer.isBuffer(out)) out = out.toString('utf8');\nmsg._tail_telemetry = String(out || '').trim();\n\nconst p = msg._logPaths || {};\nmsg.payload = `tail -n 25 ${p.control} 2>/dev/null || true`;\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 1220,
+        "y": 580,
+        "wires": [
+            [
+                "1236d6461e4f2730"
+            ]
+        ]
+    },
+    {
+        "id": "1236d6461e4f2730",
+        "type": "exec",
+        "z": "8e4fe2eda5888688",
+        "command": "",
+        "addpay": true,
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "oldrc": false,
+        "name": "Exec: tail control (stdout only)",
+        "x": 910,
+        "y": 640,
+        "wires": [
+            [
+                "3c0242bc1b5207ae"
+            ],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "3c0242bc1b5207ae",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Build prompt (1 message)",
+        "func": "// AI PROMPT BUILDER\n// - Griežtai faktinis tonas pagal vartotojo nurodymą\n// - Pilnas filtrų matomumas\n\nlet out = msg.payload;\nif (Buffer.isBuffer(out)) out = out.toString('utf8');\nmsg._tail_control = String(out || '').trim();\n\nlet ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\n\nfunction safeState(ent) {\n  const st = states?.[ent]?.state;\n  if (st === undefined || st === null) return null;\n  const s = String(st).toLowerCase();\n  if (s === 'unknown' || s === 'unavailable') return null;\n  return st;\n}\n\nconst snap = {\n  ts: new Date().toISOString(),\n  power: safeState('switch.start_stop'),\n  co2: safeState('sensor.oro_stotele_carbon_dioxide'),\n  mode: safeState('sensor.komfovent_logic_2'),\n  fan_actual: safeState('sensor.intake_fan_level_current'),\n  fan_desired: safeState('number.intake_level_1'),\n  boost_active: safeState('binary_sensor.komfovent_rate_boost_nr'),\n  humidity: safeState('sensor.bathroom_humidity'),\n  outdoor: safeState('sensor.boiler_outside_temperature'),\n  alarm: safeState('alarm_control_panel.home'),\n  filter_remaining: safeState('sensor.komfovent_filter_remaining'),\n  filter_eff_hours: safeState('sensor.komfovent_filter_effective_hours'),\n  filter_days_since_reset: safeState('sensor.komfovent_filter_days_since_reset')\n};\n\nconst userQ = (msg.user_text || '').trim();\nconst controlCtx = msg.control_context_last || flow.get('control_context_last') || null;\n\nmsg.ai_prompt = [\n  'Tu esi protingas ir įžvalgus namų mikroklimato asistentas, analizuojantis Komfovent rekuperatoriaus duomenis.',\n  'Tavo tikslas: ne tik pateikti skaičius, bet ir juos interpretuoti pagal vartotojo nustatytus slenksčius bei lauko sąlygas.',\n  'Jei vartotojas klausia apie CO2 kokybę, palygink esamą lygį su nustatytu slenksčiu (co2_threshold) ir pasakyk, ar oras geras, ar gaivus, ar jau reikėtų susirūpinti.',\n  'Atsakyk lietuviškai, natūraliu, draugišku, bet konkrečiu tonu. Venk sausų sąrašų, rašyk kaip žmogus žmogui.',\n  '',\n  'Vartotojo klausimas:',\n  userQ,\n  '',\n  'HA snapshot:',\n  JSON.stringify(snap),\n  '',\n  'Control kontekstas:',\n  controlCtx ? JSON.stringify(controlCtx) : '(nėra)',\n  '',\n  'Logų ištraukos:',\n  (msg._tail_telemetry || '') + '\\n' + (msg._tail_control || '')\n].join('\\n');\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1220,
+        "y": 640,
+        "wires": [
+            [
+                "8708465645ec3ae0"
+            ]
+        ]
+    },
+    {
+        "id": "8708465645ec3ae0",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Prepare Gemini request",
+        "func": "const MODEL = 'gemini-2.0-flash';\nconst API_KEY = (typeof env !== 'undefined' && env.get) ? env.get('GEMINI_API_KEY') : null;\nconst key = API_KEY || flow.get('GEMINI_API_KEY');\n\nif (!key) {\n  node.status({ fill: 'red', shape: 'ring', text: 'No GEMINI_API_KEY' });\n  msg.payload = { chatId: msg.chatId, type: 'message', content: 'AI neveikia: nėra GEMINI_API_KEY.' };\n  return [msg, null];\n}\n\nmsg.method = 'POST';\nmsg.url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`;\nmsg.headers = { 'Content-Type': 'application/json' };\n\nmsg.payload = {\n  contents: [\n    { role: 'user', parts: [ { text: msg.ai_prompt } ] }\n  ],\n  generationConfig: {\n    temperature: 0.3,\n    maxOutputTokens: 650\n  }\n};\n\nnode.status({ fill: 'blue', shape: 'dot', text: 'AI request...' });\nreturn [null, msg];",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1510,
+        "y": 640,
+        "wires": [
+            [
+                "3b5646a6b3bbfec3"
+            ],
+            [
+                "0347e80a9d618713"
+            ]
+        ]
+    },
+    {
+        "id": "0347e80a9d618713",
+        "type": "http request",
+        "z": "8e4fe2eda5888688",
+        "name": "HTTP → Gemini",
+        "method": "use",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": true,
+        "headers": [],
+        "x": 1760,
+        "y": 640,
+        "wires": [
+            [
+                "b7f54290520dda9e"
+            ]
+        ]
+    },
+    {
+        "id": "b7f54290520dda9e",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Parse Gemini → Telegram (single msg)",
+        "func": "let txt = '';\nlet errTxt = '';\n\nif (msg.statusCode && msg.statusCode >= 400) {\n  const e = msg.payload?.error?.message || JSON.stringify(msg.payload);\n  errTxt = `AI klaida (${msg.statusCode}): ${e}`;\n}\n\nif (!errTxt) {\n  try {\n    const parts = msg.payload?.candidates?.[0]?.content?.parts;\n    if (Array.isArray(parts) && parts.length) {\n      txt = parts.map(p => p.text).filter(Boolean).join('\\n');\n    }\n  } catch (e) {}\n}\n\nif (!txt && errTxt) txt = errTxt;\nif (!txt) txt = 'AI atsakymas tuščias / nepavyko perskaityti.';\n\nconst MAX = 3800;\nif (txt.length > MAX) {\n  txt = txt.slice(0, MAX) + '\\n\\n(…sutruminta, nes per ilga vienai žinutei)';\n}\n\nmsg.payload = { chatId: msg.chatId, type: 'message', content: txt };\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 2040,
+        "y": 640,
+        "wires": [
+            [
+                "3b5646a6b3bbfec3"
+            ]
+        ]
+    },
+    {
+        "id": "3b5646a6b3bbfec3",
+        "type": "telegram sender",
+        "z": "8e4fe2eda5888688",
+        "name": "Telegram Out",
+        "bot": "tg_bot_cfg_komfovent",
+        "outputs": 1,
+        "x": 560,
+        "y": 260,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "567de76b7fee6e80",
+        "type": "link out",
+        "z": "8e4fe2eda5888688",
+        "name": "AI Out: Control Query",
+        "mode": "link",
+        "links": [
+            "c286335cc8b40d68"
+        ],
+        "x": 595,
+        "y": 440,
+        "wires": []
+    },
+    {
+        "id": "2c73cea35fecb95c",
+        "type": "link in",
+        "z": "8e4fe2eda5888688",
+        "name": "AI In: Control Context",
+        "links": [
+            "a16e0aa2028bc8af",
+            "db629847ce4e6de4"
+        ],
+        "x": 655,
+        "y": 520,
+        "wires": [
+            [
+                "3a7613b5066d1102"
+            ]
+        ]
+    },
+    {
+        "id": "3a7613b5066d1102",
+        "type": "function",
+        "z": "8e4fe2eda5888688",
+        "name": "Store last Control Context",
+        "func": "// 1. Išsaugom kontekstą ateities klausimams (nieko nekeičiam)\nconst ctx = msg.ai_context || msg.payload || null;\nflow.set('control_context_last', ctx);\n\n// 2. Patikrinam, ar tai yra Gemini Shadow rekomendacija (ji visada turi konkretų tekstą)\nif (typeof msg.payload === 'string' && msg.payload.includes('Gemini Šešėlinė Analizė')) {\n    const ALLOWED = Number(env.get(\"MY_TELEGRAM_ID\")) || global.get(\"ALLOWED_TELEGRAM_ID\");\n\n    // Sukuriam naują žinutę siuntimui, nepaliesdami originalaus msg\n    msg.chatId = ALLOWED;\n    msg.payload = {\n        chatId: ALLOWED,\n        type: 'message',\n        content: msg.payload\n    };\n    return msg; // Siunčiam į Telegram Out\n}\n\n// Jei tai kitoks Control flow pranešimas, kurio nereikia iškart siųsti - sustojam čia\nreturn null;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 850,
+        "y": 520,
+        "wires": [
+            [
+                "3b5646a6b3bbfec3"
+            ]
+        ]
+    },
+    {
+        "id": "tg_bot_cfg_komfovent",
+        "type": "telegram bot",
+        "botname": "VentiliationBot",
+        "usernames": "",
+        "chatids": "",
+        "baseapiurl": "",
+        "testenvironment": false,
+        "updatemode": "polling",
+        "addressfamily": "4",
+        "pollinterval": "2",
+        "usesocks": false,
+        "sockshost": "",
+        "socksport": "6667",
+        "socksusername": "anonymous",
+        "sockspassword": "",
+        "bothost": "",
+        "botpath": "",
+        "localbothost": "",
+        "localbotport": "8443",
+        "publicbotport": "8443",
+        "privatekey": "",
+        "certificate": "",
+        "useselfsignedcertificate": false,
+        "sslterminated": false,
+        "verboselogging": false
+    },
+    {
+        "id": "9604db750a6f4d02",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-telegrambot": "17.0.5"
+        }
+    }
+]

@@ -1,0 +1,308 @@
+[
+    {
+        "id": "77e3fb74e4a2e935",
+        "type": "tab",
+        "label": "Komfovent - Module: Logging",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "300774fee4f6c0fe",
+        "type": "inject",
+        "z": "77e3fb74e4a2e935",
+        "name": "Init: Global Settings",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 0.5,
+        "topic": "init_globals",
+        "x": 140,
+        "y": 100,
+        "wires": [
+            [
+                "b1cc7c894e3dd917"
+            ]
+        ]
+    },
+    {
+        "id": "b1cc7c894e3dd917",
+        "type": "function",
+        "z": "77e3fb74e4a2e935",
+        "name": "Set Globals",
+        "func": "// Global nustatymai vienoje vietoje (naudojami visuose flow)\nconst schema = 5;\nconst ver = '4.3.0';\n\nglobal.set('schema_ver', schema);\nglobal.set('system_version', ver);\n\n// Vieningi HA entity ID\nglobal.set('komfovent_entities', {\n  mode: 'sensor.komfovent_logic_2',\n  boost_active_ha: 'binary_sensor.rate_boost_2',\n  boost_active_internal: 'binary_sensor.komfovent_rate_boost_nr',\n  fan_actual: 'sensor.intake_fan_level_current',\n  fan_desired: 'sensor.komfovent_fan_desired',\n  alarm: 'alarm_control_panel.home',\n  co2: 'sensor.oro_stotele_carbon_dioxide',\n  outdoor: 'sensor.boiler_outside_temperature',\n  humidity: 'sensor.bathroom_humidity',\n  windows: 'binary_sensor.langai',\n  recup: 'switch.start_stop',\n  stopflags: 'sensor.alarm_status_stop_flags'\n});\n\nglobal.set('ai_config', {\n  provider: 'gemini',\n  enabled: false,\n  telegram_enabled: false\n});\n\n// PATAISYTA VIETA: naudojame ką tik nustatytus kintamuosius\nnode.status({\n  fill: 'green',\n  shape: 'dot',\n  text: `globals set: schema ${schema}, ver ${ver}`\n});\n\nreturn null;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 390,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "54e42afa977406ad",
+        "type": "inject",
+        "z": "77e3fb74e4a2e935",
+        "name": "Scheduler: Telemetry Snapshot (10 min)",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            },
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "600",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 2,
+        "topic": "telemetry_tick",
+        "payloadType": "date",
+        "x": 200,
+        "y": 160,
+        "wires": [
+            [
+                "1406ea0114efa261"
+            ]
+        ]
+    },
+    {
+        "id": "1406ea0114efa261",
+        "type": "function",
+        "z": "77e3fb74e4a2e935",
+        "name": "Get States (Robust)",
+        "func": "// Būsenų nuskaitymas telemetrijai (patikimas)\n// - Skaitom iš Home Assistant global cache\n// - Jei alarm unknown/unavailable: naudojam paskutinę žinomą\n// - Mode/logic imam iš sensor.komfovent_logic_2 (source of truth)\n\nvar g = global.get('homeassistant') || {};\nif (typeof g !== 'object' || g === null) g = {};\n\nvar haStates =\n  (g.homeAssistant && g.homeAssistant.states) ? g.homeAssistant.states :\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\nvar ENT = {\n  alarm: 'alarm_control_panel.home',\n  co2: 'sensor.oro_stotele_carbon_dioxide',\n  outdoor: 'sensor.boiler_outside_temperature',\n  humidity: 'sensor.bathroom_humidity',\n  windows: 'binary_sensor.langai',\n  stopflags: 'sensor.alarm_status_stop_flags',\n  recup: 'switch.start_stop',\n  mode: 'sensor.komfovent_logic_2'\n};\n\nfunction isBad(v) {\n  if (v === null || v === undefined) return true;\n  var s = String(v).trim().toLowerCase();\n  return (s === '' || s === 'unknown' || s === 'unavailable');\n}\n\nfunction num(ent) {\n  if (!haStates || !haStates[ent]) return null;\n  var raw = haStates[ent].state;\n  if (isBad(raw)) return null;\n  var v = parseFloat(raw);\n  return isFinite(v) ? v : null;\n}\n\nfunction str(ent) {\n  if (!haStates || !haStates[ent]) return null;\n  var raw = haStates[ent].state;\n  if (isBad(raw)) return null;\n  return String(raw);\n}\n\nmsg.state = {\n  alarm: str(ENT.alarm),\n  co2: num(ENT.co2),\n  outdoor: num(ENT.outdoor),\n  humidity: num(ENT.humidity),\n  windows: str(ENT.windows),\n  windows_long_open: !!flow.get('windows_long_open'),\n  stopflags: str(ENT.stopflags),\n  recup: str(ENT.recup),\n  mode: str(ENT.mode)\n};\n\n// Alarm fallback\nif (msg.state.alarm) {\n  flow.set('alarm_last_known', msg.state.alarm);\n} else {\n  var lastAlarm = flow.get('alarm_last_known');\n  if (lastAlarm) msg.state.alarm = lastAlarm;\n}\n\n// Mode fallback\nif (msg.state.mode) {\n  flow.set('mode_last_known', msg.state.mode);\n} else {\n  var lastMode = flow.get('mode_last_known');\n  if (lastMode) msg.state.mode = lastMode;\n}\n\nmsg.state.recup_is_on = (String(msg.state.recup || '').toLowerCase() === 'on');\n\nnode.status({\n  fill: 'green',\n  shape: 'dot',\n  text: `telemetry tick | CO2 ${Math.round(msg.state.co2 || 0)} | mode ${msg.state.mode || ''} | alarm ${msg.state.alarm || ''}`\n});\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 470,
+        "y": 160,
+        "wires": [
+            [
+                "5c8a2f50c7d9e721"
+            ]
+        ]
+    },
+    {
+        "id": "5c8a2f50c7d9e721",
+        "type": "function",
+        "z": "77e3fb74e4a2e935",
+        "name": "Build Telemetry Log Record",
+        "func": "// Telemetrijos snapshot įrašas (STABLE)\n// - schema_ver iš global\n// - 45 min RATE langas (anti-flicker)\n// - 0% fan logika\n// - boost_active = tik vidinis NR indikatorius (source of truth)\n// - rate_final publikuojam į global: komfovent.telemetry_rate (Control konsistencijai)\n\nconst TZ = 'Europe/Vilnius';\nconst s = msg.state || {};\nconst ents = global.get('komfovent_entities') || {};\n\n// ===== versijos iš global =====\nconst schema_ver = Number(global.get('schema_ver') || '');\nconst flow_ver = String(global.get('system_version') || '');\n\n// ===== HA states (robust) =====\nlet ha = global.get('homeassistant') || {};\nlet states =\n  (ha?.homeAssistant?.states) ||\n  (ha?.homeassistant?.states) ||\n  (ha?.states) ||\n  {};\n\nfunction ltIso(dateObj) {\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ,\n    year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', second: '2-digit',\n    hour12: false\n  }).format(dateObj).replace(' ', 'T');\n}\n\nfunction isNum(v) {\n  return v !== null && v !== undefined && isFinite(v);\n}\n\nfunction clamp(n, a, b) {\n  return Math.max(a, Math.min(b, n));\n}\n\nfunction boolFromState(entId) {\n  const raw = String(states?.[entId]?.state || '').toLowerCase();\n  return (raw === 'on' || raw === 'true');\n}\n\nconst nowDate = new Date();\nconst nowMs = nowDate.getTime();\nconst ts = ltIso(nowDate);\n\nconst dow = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(nowDate);\nconst hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hour12: false }).format(nowDate));\n\n// ===== ALARM / OCCUPIED (su fallback) =====\nlet alarm = s.alarm;\nif (!alarm) alarm = flow.get('alarm_last_known') || null;\nif (alarm) flow.set('alarm_last_known', alarm);\n\nconst occupied = (String(alarm || '') === 'disarmed');\n\n// ===== MODE (su fallback) =====\nlet mode = (s.mode && String(s.mode).trim())\n  ? String(s.mode).trim()\n  : (flow.get('mode_last_known') || null);\n\nif (mode) flow.set('mode_last_known', mode);\n\n// ===== RECUP IS ON =====\nlet recupIsOn = (s.recup_is_on === true);\n\nif (s.recup_is_on === undefined) {\n  const recupEnt = ents.recup || 'switch.start_stop';\n  recupIsOn = (String(states?.[recupEnt]?.state || '').toLowerCase() === 'on');\n}\n\n// ===== FAN actual / desired (0% LOGIC) =====\nconst FAN_ACTUAL_ENTITY = ents.fan_actual || 'sensor.intake_fan_level_current';\nconst FAN_DESIRED_ENTITY = ents.fan_desired || 'sensor.komfovent_fan_desired';\n\nlet fanActual = parseFloat(states?.[FAN_ACTUAL_ENTITY]?.state);\nif (!isNum(fanActual) || fanActual === 0 || recupIsOn === false)\n  fanActual = 0;\nelse\n  fanActual = clamp(Math.round(fanActual), 20, 100);\n\nlet fanDesired = parseFloat(states?.[FAN_DESIRED_ENTITY]?.state);\nif (!isNum(fanDesired) || fanDesired === 0 || recupIsOn === false)\n  fanDesired = 0;\nelse\n  fanDesired = clamp(Math.round(fanDesired), 20, 100);\n\n// final fan\nconst fan = (fanDesired > 0) ? fanDesired : fanActual;\n\n// ===== CO2 =====\nconst co2 = isNum(s.co2) ? Number(s.co2) : null;\n\n// ===== RATE (45 min sliding window) =====\nconst RATE_WINDOW_MIN = 45;\nconst MAX_KEEP_MIN = 240;\n\nlet tlog = flow.get('telemetry_co2_log');\nif (!Array.isArray(tlog)) tlog = [];\n\nif (co2 !== null)\n  tlog.push({ ts: nowMs, co2 });\n\ntlog = tlog.filter(p =>\n  (p && isNum(p.ts) && isNum(p.co2))\n    ? (nowMs - p.ts <= (MAX_KEEP_MIN * 60000))\n    : false\n);\n\nflow.set('telemetry_co2_log', tlog);\n\nlet rateWindow = null;\nconst win = tlog.filter(p => nowMs - p.ts <= (RATE_WINDOW_MIN * 60000));\n\n// minimum 2 taškai ir ≥10 min skirtumas\nif (win.length >= 2) {\n  const first = win[0];\n  const last = win[win.length - 1];\n  const deltaMin = (last.ts - first.ts) / 60000;\n\n  if (deltaMin >= 10) {\n    rateWindow = Number(((last.co2 - first.co2) / deltaMin).toFixed(2)); // ppm/min\n  }\n}\n\n// stabilizuotas rate_final\nlet rate_final = rateWindow;\n\nif (rate_final === null || !isFinite(rate_final)) {\n  const lastRate = flow.get('telemetry_last_rate');\n  rate_final = isFinite(Number(lastRate)) ? Number(lastRate) : 0;\n}\nelse if (Math.abs(rate_final) < 0.05) {\n  rate_final = 0;\n  flow.set('telemetry_last_rate', 0);\n}\nelse {\n  flow.set('telemetry_last_rate', rate_final);\n}\n\n// ===== PUBLISH RATE (vienas šaltinis Control'ui) =====\nglobal.set('komfovent.telemetry_rate', rate_final);\nglobal.set('komfovent.telemetry_rate_ts', nowMs);\n\n// ===== BOOST (source of truth) =====\nconst boost_active = boolFromState(\n  ents.boost_active_internal || 'binary_sensor.komfovent_rate_boost_nr'\n);\n\n// ===== LOG RECORD =====\nmsg.log_type = 'telemetry';\nmsg.log_record = {\n  schema_ver,\n  flow_ver,\n  module: 'telemetry',\n  kind: 'snapshot',\n\n  ts,\n  occupied,\n  dow,\n  hour,\n\n  mode,\n\n  fan,\n  fan_actual: fanActual,\n  fan_desired: fanDesired,\n\n  co2,\n  rate: rate_final,\n\n  boost_active,\n\n  outdoor: isNum(s.outdoor) ? Number(s.outdoor) : null,\n  humidity: isNum(s.humidity) ? Number(s.humidity) : null,\n  windows_long_open: !!s.windows_long_open\n};\n\nnode.status({\n  fill: 'blue',\n  shape: 'dot',\n  text: `v${flow_ver} | CO2 ${co2 ?? 'n/a'} | rate ${rate_final} | fan ${fan}% | boost ${boost_active}`\n});\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 720,
+        "y": 140,
+        "wires": [
+            [
+                "bcc09d8b6598eb3d"
+            ]
+        ]
+    },
+    {
+        "id": "976aa247b41e78d0",
+        "type": "link in",
+        "z": "77e3fb74e4a2e935",
+        "name": "Log In: Control",
+        "links": [],
+        "x": 235,
+        "y": 220,
+        "wires": [
+            [
+                "bcc09d8b6598eb3d"
+            ]
+        ]
+    },
+    {
+        "id": "b94f8a643031659c",
+        "type": "link in",
+        "z": "77e3fb74e4a2e935",
+        "name": "Log In: Learning",
+        "links": [
+            "4d4e8058983f4673"
+        ],
+        "x": 235,
+        "y": 260,
+        "wires": [
+            [
+                "bcc09d8b6598eb3d"
+            ]
+        ]
+    },
+    {
+        "id": "86d48d99068805f5",
+        "type": "link in",
+        "z": "77e3fb74e4a2e935",
+        "name": "Log In: Filters",
+        "links": [
+            "b9c13e70a0382586"
+        ],
+        "x": 235,
+        "y": 300,
+        "wires": [
+            [
+                "bcc09d8b6598eb3d"
+            ]
+        ]
+    },
+    {
+        "id": "bcc09d8b6598eb3d",
+        "type": "function",
+        "z": "77e3fb74e4a2e935",
+        "name": "Normalize Record",
+        "func": "// Normalizuojam visų modulių įrašus į schema v3.\n// Tikimasi:\n// - msg.log_type: telemetry | control | learning | filters\n// - msg.log_record: object\n\nconst schema_ver = Number(global.get('schema_ver') || '');\nconst flow_ver = String(global.get('system_version') || '');\n\nconst type = String(msg.log_type || '').trim();\nconst rec = msg.log_record;\n\nif (!type || !rec || typeof rec !== 'object') {\n  node.status({ fill: 'red', shape: 'ring', text: 'missing log_type/log_record' });\n  return null;\n}\n\n// module\nif (!rec.module) rec.module = type;\n\n// schema / version\nrec.schema_ver = schema_ver;\nrec.flow_ver = flow_ver;\n\n// kind: jei neatėjo – priskiriam pagal tipą\nif (!rec.kind) {\n  if (type === 'telemetry') rec.kind = 'snapshot';\n  else if (type === 'control') rec.kind = 'decision';\n  else if (type === 'learning') rec.kind = 'learning_update';\n  else if (type === 'filters') rec.kind = 'filter_tick';\n  else rec.kind = 'unknown';\n}\n\nmsg.log_record = rec;\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 410,
+        "y": 260,
+        "wires": [
+            [
+                "af8095d5be1b7178"
+            ]
+        ]
+    },
+    {
+        "id": "af8095d5be1b7178",
+        "type": "function",
+        "z": "77e3fb74e4a2e935",
+        "name": "Prepare JSONL Append (daily file)",
+        "func": "// Paruošiam msg.filename ir msg.payload failo append'ui.\n// Tikimasi:\n// - msg.log_type: 'telemetry' | 'control' | 'learning' | 'filters'\n// - msg.log_record: object (schema v3)\n\nconst TZ = 'Europe/Vilnius';\nconst type = String(msg.log_type || '').trim();\nconst rec = msg.log_record;\n\nif (!type || !rec || typeof rec !== 'object') {\n  node.status({ fill: 'red', shape: 'ring', text: 'missing log_type/log_record' });\n  return null;\n}\n\nfunction ltDate(d){\n  const s = new Intl.DateTimeFormat('sv-SE', { timeZone: TZ, year:'numeric', month:'2-digit', day:'2-digit' }).format(d);\n  return s;\n}\n\nconst day = ltDate(new Date());\n\nlet prefix = null;\nif (type === 'telemetry') prefix = 'komfovent_telemetry_';\nelse if (type === 'control') prefix = 'komfovent_control_';\nelse if (type === 'learning') prefix = 'komfovent_learning_';\nelse if (type === 'filters') prefix = 'komfovent_filters_';\nelse {\n  node.status({ fill: 'red', shape: 'ring', text: `unknown log_type ${type}` });\n  return null;\n}\n\nmsg.filename = `/data/logs/komfovent/${prefix}${day}.jsonl`;\nmsg.payload = JSON.stringify(rec) + \"\\n\";\n\nnode.status({ fill: 'blue', shape: 'dot', text: `append ${type} -> ${day}` });\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 680,
+        "y": 260,
+        "wires": [
+            [
+                "b124a7572a40f803"
+            ]
+        ]
+    },
+    {
+        "id": "b124a7572a40f803",
+        "type": "file",
+        "z": "77e3fb74e4a2e935",
+        "name": "Append JSONL (daily)",
+        "filename": "filename",
+        "filenameType": "msg",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "false",
+        "encoding": "none",
+        "x": 960,
+        "y": 260,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "a352372a7d200682",
+        "type": "inject",
+        "z": "77e3fb74e4a2e935",
+        "name": "Scheduler: Retention Cleanup (03:15)",
+        "props": [
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "15 3 * * *",
+        "once": true,
+        "onceDelay": 10,
+        "topic": "cleanup",
+        "x": 190,
+        "y": 360,
+        "wires": [
+            [
+                "909468e82665e352"
+            ]
+        ]
+    },
+    {
+        "id": "909468e82665e352",
+        "type": "function",
+        "z": "77e3fb74e4a2e935",
+        "name": "Build Cleanup Command",
+        "func": "// Retention: trinam komfovent_*.jsonl senesnius nei 60 dienų.\n// Vykdom container'io viduje (Node-RED konteineryje), kelias /data/logs/komfovent.\n\nmsg.payload = \"find /data/logs/komfovent -type f -name 'komfovent_*.jsonl' -mtime +60 -print -delete\";\nreturn msg;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 470,
+        "y": 360,
+        "wires": [
+            [
+                "e0c479bfc56b11cd"
+            ]
+        ]
+    },
+    {
+        "id": "e0c479bfc56b11cd",
+        "type": "exec",
+        "z": "77e3fb74e4a2e935",
+        "command": "",
+        "addpay": "payload",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "winHide": false,
+        "oldrc": false,
+        "name": "Exec: Cleanup Old Logs",
+        "x": 760,
+        "y": 360,
+        "wires": [
+            [
+                "f620056822e6967d"
+            ],
+            [
+                "f620056822e6967d"
+            ],
+            [
+                "f620056822e6967d"
+            ]
+        ]
+    },
+    {
+        "id": "f620056822e6967d",
+        "type": "function",
+        "z": "77e3fb74e4a2e935",
+        "name": "Cleanup Result (Status)",
+        "func": "// Parodom rezultatą status'e (kad matytum, jog cleanup suveikė)\n\nlet out = msg.payload;\nif (Buffer.isBuffer(out)) out = out.toString('utf8');\nout = String(out || '').trim();\n\nif (out) node.status({ fill: 'yellow', shape: 'dot', text: `cleanup deleted:\\n${out.split('\\n').length} files` });\nelse node.status({ fill: 'green', shape: 'dot', text: 'cleanup ok (nothing to delete)' });\n\nreturn null;",
+        "outputs": 1,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1030,
+        "y": 360,
+        "wires": [
+            []
+        ]
+    }
+]

@@ -12,6 +12,27 @@ MAJOR.MINOR.PATCH
 
 ---
 
+## [4.3.0] - 2026-02-15
+
+### DI Šešėlinė analizė ir Schemų unifikavimas
+
+**Pridėta:**
+- Gemini 2.0 Flash integracija paros vėdinimo auditui.
+- Filtrų stebėjimo modulis su efektyvių valandų skaičiavimu.
+- Centralizuotas HA Entity ID ir versijų valdymas globaliame kontekste.
+- Lietuviškas loginis režimų atvaizdavimas (STOP, OVR, Naktis, Diena).
+
+**Pakeista:**
+- Duomenų schema atnaujinta į **v5 (Unified Snapshot Stub)**.
+- Visi kodo blokai tapo dinamiški (versijos nebeįrašytos ranka).
+- `boost_active` automatikai dabar remiasi tik vidiniu Node-RED indikatoriumi.
+
+**Sutvarkyta:**
+- Laiko zonų nesutapimai (visur įvestas Europe/Vilnius formatas).
+- Išvalyti asmeniniai Telegram ID iš kodo komentarų.
+
+---
+
 ## [4.2.0] - 2026-02-14
 
 ### Logging ir telemetrijos stabilizavimo versija
