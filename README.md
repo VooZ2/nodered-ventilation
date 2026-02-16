@@ -1,22 +1,18 @@
-# 🌬️ Komfovent Smart Automation (v4.3.0)
+# 🌬️ Komfovent Smart Automation
 
-Profesionalus rekuperatoriaus valdymo ir adaptyvaus CO₂ mokymosi sprendimas, sukurtas **Node-RED** aplinkai ir integruotas su **Home Assistant**. 
-
-Sistema dinamiškai reguliuoja vėdinimą realiu laiku, prisitaiko prie gyventojų ritmo per savarankišką mokymąsi ir yra audituojama dirbtinio intelekto, siekiant maksimalaus komforto bei energijos efektyvumo.
+Profesionalus rekuperatoriaus valdymo ir adaptyvaus $CO_2$ mokymosi sprendimas, sukurtas **Node-RED** aplinkai ir integruotas su **Home Assistant**. Sistema dinamiškai reguliuoja vėdinimą realiu laiku, prisitaiko prie gyventojų ritmo per savarankišką mokymąsi ir yra audituojama **Gemini** dirbtinio intelekto, siekiant maksimalaus komforto bei energijos efektyvumo.
 
 <img width="1450" height="508" alt="Screenshot 2026-02-12 at 22 46 20" src="https://github.com/user-attachments/assets/40f036b9-5d66-4f8a-9ecc-0869ea52c75c" />
 
 ## ⚠ Projekto Paskirtis (Disclaimer)
 
-Šis projektas yra kuriamas ir naudojamas tik asmeniniams poreikiams. GitHub repozitorija naudojama kaip versijų ir pakeitimų sekimo įrankis, o ne kaip viešai vystomas ar universalus sprendimas.
+Projektas sukurtas asmeniniams poreikiams. GitHub repozitorija skirta versijų sekimui. Sistema nėra universali; ją naudojate savo rizika be palaikymo.
 
-Sistema nėra sukurta taip, kad ją būtų galima lengvai perimti ir pritaikyti be papildomo konfigūravimo. Kiekvienas gali naudoti ar adaptuoti kodą savo rizika, tačiau aš neteikiu palaikymo ar individualių pritaikymo konsultacijų.
-
-**SVARBU:** Šis projektas (architektūra, programinis kodas ir dokumentacija) sukurtas  su dirbtinio intelekto modeliais (**Gemini** ir **ChatGPT**).
+**SVARBU:** Ši sistema (architektūra, programinis kodas ir dokumentacija) sukurta bendradarbiaujant su dirbtinio intelekto modeliais (**Gemini** ir **ChatGPT**).
 
 ---
 
-## 🧠 Realaus Laiko Valdymo Logika (Real-time Control Flow)
+## 🧠 Realaus Laiko Valdymo Logika
 
 Sprendimas priimamas griežta prioritetų tvarka (nuo aukščiausio):
 
@@ -28,7 +24,7 @@ Sprendimas priimamas griežta prioritetų tvarka (nuo aukščiausio):
 
 ---
 
-## 📊 Bazinis Vėdinimas Pagal CO₂ Laiptus (Base CO₂ Ventilation Steps)
+## 📊 Bazinis Vėdinimas Pagal CO₂ Laiptus
 
 | CO₂ lygis (ppm) | Ventiliatoriaus greitis (%) |
 | :--- | :--- |
@@ -40,7 +36,7 @@ Sprendimas priimamas griežta prioritetų tvarka (nuo aukščiausio):
 
 ---
 
-## 📈 Aktyvus Vėdinimas (Rate-Based Boost)
+## 📈 Aktyvus Vėdinimas
 
 Sistema reaguoja ne tik į CO₂ lygį, bet ir į jo kilimo greitį (**ppm/min**).
 
@@ -51,30 +47,25 @@ Sistema reaguoja ne tik į CO₂ lygį, bet ir į jo kilimo greitį (**ppm/min**
 
 ---
 
-## 🤖 Adaptyvus CO₂ Mokymasis (Adaptive Learning Module)
+## 🤖 Adaptyvus CO₂ Mokymasis
 
-Kas naktį 03:00 (LT) analizuojamos paskutinės 24 valandos ir koreguojamas vėdinimo slenkstis.
-
-* **Proporcinė Adaptacija:** `delta = -round((avgRate - TARGET_RATE) * K)`.
-* **Parametrai:** `TARGET_RATE = 60 ppm/h`, `K = 0.2`, maksimali korekcija ±25 ppm per parą.
-* **Mokymosi Saugikliai (Guards):**
-    * **Stability Lock:** Blokuoja mokymąsi, jei paros dinamika per maža.
-    * **Gap Guard:** Blokuoja mokymąsi, jei trūksta >35% duomenų.
-    * **Alarm Block:** Blokuoja mokymąsi, jei namuose nieko nėra (Signalizacija ≠ Disarmed).
+Sistema remiasi **Predictive Matrix** modeliu, kuris eliminuoja statinių parametrų poreikį:
+* **Matricos stebėjimas**: DI nuolat seka matricos brandą (sukauptų dienų skaičių) ir pasitikėjimo lygį (*Confidence Level*), užtikrindamas sprendimų tikslumą.
+* **Automatinė adaptacija**: Kasdien perskaičiuojamas optimalus įsijungimo slenkstis pagal pastarųjų 14 dienų istorinius duomenis.
+* **Profilinė analizė**: Atskiriami darbo dienų ir savaitgalių vėdinimo modeliai, prisitaikant prie kintančio namų užimtumo.
 
 ---
 
-## 👁️ Gemini Analizė (Gemini Shadow Analysis)
+### 🤖 Gemini Analizė ir Auditas
 
-Pradedant nuo **v4.3.0**, įdiegtas lygiagretus DI audito modulis, naudojantis `gemini-2.0-flash`.
-
-* **Veikimo Principas:** Po matematinio skaičiavimo Gemini gauna paros telemetrijos ištrauką.
-* **Užduotis:** DI vertina ar algoritmas nesuklydo dėl trumpalaikių anomalijų (pvz. gaminimo šuolių) ir pateikia savo rekomendaciją per Telegram lietuvių kalba.
-* **Tikslas:** Suteikti antrą „nuomonę“ prieš fiziškai keičiant sistemos parametrus.
+Sistemoje integruotas **Gemini** (Google AI) gateway modulis, veikiantis kaip vėdinimo ekspertas:
+* **Interaktyvus asistentas**: Per Telegram teikia žmogiškai suformuluotas suvestines apie temperatūrą, OVR būsenas ir sistemos brandą.
+* **Sprendimų auditas**: AI nuolat analizuoja logus, nustatydamas anomalijas (pvz., tiekiamo oro temperatūros nuokrypius) ar efektyvumo spragas.
+* **Griežtas komunikacijos standartas**: DI atsakymai formuojami be techninių šiukšlių, pradedant tiesioginiais faktais ir naudojant taisyklingą lietuvių kalbą.
 
 ---
 
-## 🧹 Filtrų Stebėjimas (Filter Monitoring)
+## 🧹 Filtrų Stebėjimas
 
 Specializuotas modulis filtrų užterštumo ir efektyvumo sekimui.
 
@@ -83,27 +74,27 @@ Specializuotas modulis filtrų užterštumo ir efektyvumo sekimui.
 
 ---
 
-## 🗂️ Duomenų Kaupimas (Logging Module)
+## 🗂️ Duomenų Kaupimas
 
-Sistemos pagrindas – **v4 Unified Schema**, užtikrinanti, kad visi moduliai kalbėtų ta pačia „kalba“.
-
-* **Snapshot Stub:** Kiekvienas įrašas (telemetrija, kontrolė, mokymasis) turi bazinį kontekstą: laikas (LT), `occupied`, `mode`, `co2`, `outdoor`, `humidity`.
-* **Formatas:** JSONL (1 eilutė = 1 objektas), paruošta Machine Learning analizei.
-* **Retention:** Automatinis duomenų saugojimo terminas optimizuotas 60-čiai dienų.
+Sistemos „atmintis“ saugoma struktūrizuotuose `.jsonl` failuose:
+* **v7 Unified Schema**: Kiekvienas įrašas fiksuoja $CO_2$, greitį, paduodamo oro temperatūrą (`sensor.intake_air_temperature`) bei OVR būsenas.
+* **Kontekstinis Snapshot**: DI asistentas kaskart gauna pilną sistemos vaizdą, įskaitant signalizacijos būseną bei filtrų nusidėvėjimą.
 
 ---
 
-## 🛡️ Atsparumo Mechanizmai (Resilience Mechanisms)
+## 🛡️ Atsparumo Mechanizmai
 
-* **Fallback:** Paskutinės žinomos būsenos išsaugojimas po Home Assistant restarto.
-* **RBE Filtras:** Užtikrina, kad į rekuperatorių nebūtų siunčiamos perteklinės, nesikeičiančios komandos.
-* **Timezone Safety:** Naudojama `Intl.DateTimeFormat` su `Europe/Vilnius` zona, apsauganti nuo klaidų keičiantis vasaros/žiemos laikui.
+Sukurta maksimaliam patikimumui užtikrinti (*High Availability*):
+* **Alarm Fallback**: Naudojama paskutinė žinoma signalizacijos būsena, jei ryšys su HA sutrinka.
+* **Windows Guard**: Automatinis vėdinimo stabdymas aptikus atvirus langus (timeout: 10 min.).
+* **Stop Flags**: Kritinis blokavimas aptikus rekuperatoriaus klaidas ar aliarmo signalus.
+* **OVR Hysteresis**: Išorinio valdymo (pvz., vonios drėgmės) prioritetas su apsauga nuo dažno junginėjimo.
 
 ---
 
 ## 🔢 Versija (Version)
 
-**v4.3.0** — Pilna Gemini integracija, suvienodinti Snapshot logai, įdiegtas protingas laiko zonų valdymas.
+**v4.3.1** — Pilna Gemini integracija, suvienodinti Snapshot logai, įdiegtas protingas laiko zonų valdymas.
 
 ---
 

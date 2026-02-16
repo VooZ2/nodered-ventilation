@@ -11,6 +11,27 @@ MAJOR.MINOR.PATCH
 - PATCH – klaidų taisymai ir smulkūs patobulinimai  
 
 ---
+## [4.3.1] - 2026-02-16
+
+### Tiekiamo oro temperatūros, OVR integracija ir DI komunikacijos standartas
+
+**Pridėta:**
+- Įdiegta pilna tiekiamo oro temperatūros (`intake_temp`) stebėsena visuose lygmenyse: nuo HA sensoriaus iki DI asistento.
+- Pridėtas išorinio valdymo (OVR) būsenos sekimas tiesiai iš `bath_ovr_active` loginio kintamojo ir HA relės.
+- Duomenų schema atnaujinta į **v7 (Historical Intake Data)**, leidžiančią kaupti istorinius temperatūros duomenis būsimai analizei.
+
+**Pakeista:**
+- **DI bendravimo standartas:** Sugriežtintos Gemini taisyklės – uždraustas Markdown formatavimas (žvaigždutės), panaikinti mandagumo filtrai ir įvestas tiesioginių faktų prioritetas.
+- **Matricos brandos komunikacija:** DI asistentas instruktuotas nebenaudoti techninio kodo `training_days_actual`, o pranešti apie mokymosi eigą žmogiškai (pvz., „duomenys kaupiami 5 dienas“).
+- **Būsenų logika:** OVR ir Boost būsenos suvienodintos į dvi fazes: **Aktyvus** arba **Išjungtas**.
+- **Statuso suvestinė:** Telegram komanda `/status` papildyta temperatūra, OVR bei Boost būsenomis, naudojant pilną lietuvišką terminologiją.
+
+**KSutvarkyta:**
+- **Sensorių ID sinchronizacija:** Pataisytas temperatūros jutiklio ID į `sensor.intake_air_temperature` pagal HA duomenis.
+- **Srauto klaida:** Pataisytas „Intake air temperature“ mazgo klaidingas `msg.topic` nustatymas (pakeistas iš `humidity` į `intake_temp`).
+- **DI matomumas:** Ištaisyta kritinė klaida, dėl kurios Gemini nematė temperatūros reikšmės, nors ji buvo HA sistemoje.
+
+---
 
 ## [4.3.0] - 2026-02-15
 

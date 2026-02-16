@@ -48,11 +48,11 @@
         "once": false,
         "onceDelay": 0.2,
         "topic": "tick",
-        "x": 170,
-        "y": 160,
+        "x": 350,
+        "y": 100,
         "wires": [
             [
-                "a5a6b6eee1362ade"
+                "fe6067cc4e78c83c"
             ]
         ]
     },
@@ -75,7 +75,7 @@
         "payload": "",
         "payloadType": "date",
         "x": 180,
-        "y": 220,
+        "y": 180,
         "wires": [
             [
                 "a5a6b6eee1362ade"
@@ -101,7 +101,7 @@
         "payload": "",
         "payloadType": "date",
         "x": 180,
-        "y": 280,
+        "y": 240,
         "wires": [
             [
                 "a5a6b6eee1362ade"
@@ -147,7 +147,7 @@
             }
         ],
         "x": 130,
-        "y": 340,
+        "y": 300,
         "wires": [
             [
                 "a5a6b6eee1362ade"
@@ -193,7 +193,7 @@
             }
         ],
         "x": 130,
-        "y": 400,
+        "y": 360,
         "wires": [
             [
                 "a5a6b6eee1362ade"
@@ -231,7 +231,7 @@
             }
         ],
         "x": 120,
-        "y": 460,
+        "y": 420,
         "wires": [
             [
                 "a5a6b6eee1362ade"
@@ -269,7 +269,7 @@
             }
         ],
         "x": 130,
-        "y": 520,
+        "y": 480,
         "wires": [
             [
                 "a5a6b6eee1362ade"
@@ -314,7 +314,7 @@
             }
         ],
         "x": 150,
-        "y": 580,
+        "y": 540,
         "wires": [
             [
                 "a5a6b6eee1362ade"
@@ -352,7 +352,7 @@
             }
         ],
         "x": 150,
-        "y": 640,
+        "y": 600,
         "wires": [
             [
                 "566cbd55e241dd29"
@@ -367,8 +367,8 @@
         "func": "// Langų saugiklis: paleidžiam 10 min patvirtinimą\n// - Tikslas: windows_long_open=true tik jei langai iš tiesų liko atidaryti >=10 min\n\nlet st = null;\nif (msg?.payload?.new_state?.state !== undefined) st = String(msg.payload.new_state.state);\nif (!st || st === 'unknown' || st === 'unavailable') return null;\n\nif (st === 'on') {\n  flow.set('windows_guard_target', 'on');\n  return { topic: 'windows_guard', payload: 'start' };\n}\n\nif (st === 'off') {\n  flow.set('windows_guard_target', 'off');\n  return { topic: 'windows_guard', payload: 'start' };\n}\n\nreturn null;",
         "outputs": 1,
         "noerr": 0,
-        "x": 380,
-        "y": 640,
+        "x": 400,
+        "y": 600,
         "wires": [
             [
                 "685d00d27e3ecf35"
@@ -392,8 +392,8 @@
         "bytopic": "all",
         "topic": "topic",
         "outputs": 1,
-        "x": 660,
-        "y": 640,
+        "x": 700,
+        "y": 600,
         "wires": [
             [
                 "6d5042c4e1e050b8"
@@ -408,8 +408,8 @@
         "func": "// Po 10 min patikrinam ar langai vis dar atidaryti\n// - jei target buvo 'on' ir dabar 'on' -> windows_long_open=true\n// - jei target buvo 'off' -> windows_long_open=false\n\nlet ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\n\nconst cur = states['binary_sensor.langai'] ? String(states['binary_sensor.langai'].state) : null;\nconst target = flow.get('windows_guard_target');\n\nif (target === 'on') {\n  flow.set('windows_long_open', cur === 'on');\n} else if (target === 'off') {\n  flow.set('windows_long_open', false);\n}\n\nmsg.topic = 'windows_guard_applied';\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 980,
-        "y": 640,
+        "x": 1020,
+        "y": 600,
         "wires": [
             [
                 "a5a6b6eee1362ade"
@@ -421,15 +421,15 @@
         "type": "function",
         "z": "d6b318ccac07d1e5",
         "name": "Get States",
-        "func": "// ===== Būsenų nuskaitymas (patikimas) =====\n// - Home Assistant būsenos iš global konteinerio (su fallback)\n// - Dienos / nakties logika pagal lokalų laiką (22:00–07:00)\n// - Signalizacijos fallback (po HA restarto) – naudojam paskutinę žinomą\n// - boost_active_ha skaitom tik stebėjimui/logams (automatika jo nenaudoja)\n\nlet ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\n\nconst ENT = {\n  alarm: 'alarm_control_panel.home',\n  windows: 'binary_sensor.langai',\n  co2: 'sensor.oro_stotele_carbon_dioxide',\n  outdoor: 'sensor.boiler_outside_temperature',\n  humidity: 'sensor.bathroom_humidity',\n  stopflags: 'sensor.alarm_status_stop_flags',\n  recup: 'switch.start_stop',\n  mode: 'sensor.komfovent_logic_2',\n  fan_actual: 'sensor.intake_fan_level_current',\n  boost_ha: 'binary_sensor.komfovent_rate_boost_nr'\n};\n\nfunction isBad(v){\n  if (v === null || v === undefined) return true;\n  const s = String(v).toLowerCase();\n  return s === 'unknown' || s === 'unavailable';\n}\nfunction isNum(v){ return v !== null && v !== undefined && isFinite(v); }\nfunction num(ent){\n  const raw = states?.[ent]?.state;\n  if (isBad(raw)) return null;\n  const v = parseFloat(raw);\n  return isFinite(v) ? v : null;\n}\nfunction str(ent){\n  const raw = states?.[ent]?.state;\n  if (isBad(raw)) return null;\n  return String(raw);\n}\nfunction bool(ent){\n  const raw = states?.[ent]?.state;\n  if (isBad(raw)) return null;\n  const v = String(raw).toLowerCase();\n  return (v === 'on' || v === 'true');\n}\n\nmsg.state = {\n  alarm: str(ENT.alarm),\n  windows: str(ENT.windows),\n  windows_long_open: !!flow.get('windows_long_open'),\n  co2: num(ENT.co2),\n  outdoor: num(ENT.outdoor),\n  humidity: num(ENT.humidity),\n  stopflags: str(ENT.stopflags),\n  recup: str(ENT.recup),\n  mode: str(ENT.mode),\n  fan_actual: num(ENT.fan_actual),\n  boost_active_ha: (bool(ENT.boost_ha) === true)\n};\n\n// Alarm fallback\nif (msg.state.alarm) flow.set('alarm_last_known', msg.state.alarm);\nelse {\n  const last = flow.get('alarm_last_known');\n  if (last) msg.state.alarm = last;\n}\n\n// Mode fallback\nif (msg.state.mode) flow.set('mode_last_known', msg.state.mode);\nelse {\n  const lastMode = flow.get('mode_last_known');\n  if (lastMode) msg.state.mode = lastMode;\n}\n\nmsg.state.recup_is_on = (String(msg.state.recup || '').toLowerCase() === 'on');\n\n// Day/Night\nconst d = new Date();\nconst mins = d.getHours() * 60 + d.getMinutes();\nlet isNight = (mins >= 22 * 60 || mins < 7 * 60);\nmsg.state.is_night = isNight;\nmsg.state.is_day = !isNight;\n\n// STOP FLAGS active\nconst stopRaw = (msg.state.stopflags ?? '');\nconst stop = String(stopRaw).trim().toLowerCase();\nconst stopActive = stop && ['none','unknown','unavailable',''].indexOf(stop) === -1;\n\n// Node status\nlet parts = [];\nparts.push(isNight ? 'NIGHT' : 'DAY');\nif (isNum(msg.state.co2)) parts.push('CO2 ' + Math.round(msg.state.co2));\nif (msg.state.windows_long_open) parts.push('WIN_LONG');\nif (stopActive) parts.push('STOP!');\nparts.push(msg.state.recup_is_on ? 'RECUP ON' : 'RECUP OFF');\nif (msg.state.mode) parts.push('MODE ' + msg.state.mode);\nif (msg.state.boost_active_ha) parts.push('BOOST_HA');\n\nnode.status({ fill: stopActive ? 'red' : (msg.state.windows_long_open ? 'yellow' : 'green'), shape: 'dot', text: parts.join(' | ') });\n\nreturn msg;",
+        "func": "// ===== Būsenų nuskaitymas (patikimas) =====\n// - Home Assistant būsenos iš global konteinerio (su fallback)\n// - Dienos / nakties logika pagal lokalų laiką (22:00–07:00)\n// - Signalizacijos fallback (po HA restarto) – naudojam paskutinę žinomą\n// - boost_active_ha skaitom tik stebėjimui/logams (automatika jo nenaudoja)\n\nlet ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\n\nconst ENT = {\n  alarm: 'alarm_control_panel.home',\n  windows: 'binary_sensor.langai',\n  co2: 'sensor.oro_stotele_carbon_dioxide',\n  outdoor: 'sensor.boiler_outside_temperature',\n  humidity: 'sensor.bathroom_humidity',\n  stopflags: 'sensor.alarm_status_stop_flags',\n  recup: 'switch.start_stop',\n  mode: 'sensor.komfovent_logic_2',\n  fan_actual: 'sensor.intake_fan_level_current',\n  boost_ha: 'binary_sensor.komfovent_rate_boost_nr',\n  intake_temp: \"sensor.intake_air_temperature\"\n};\n\nfunction isBad(v){\n  if (v === null || v === undefined) return true;\n  const s = String(v).toLowerCase();\n  return s === 'unknown' || s === 'unavailable';\n}\nfunction isNum(v){ return v !== null && v !== undefined && isFinite(v); }\nfunction num(ent){\n  const raw = states?.[ent]?.state;\n  if (isBad(raw)) return null;\n  const v = parseFloat(raw);\n  return isFinite(v) ? v : null;\n}\nfunction str(ent){\n  const raw = states?.[ent]?.state;\n  if (isBad(raw)) return null;\n  return String(raw);\n}\nfunction bool(ent){\n  const raw = states?.[ent]?.state;\n  if (isBad(raw)) return null;\n  const v = String(raw).toLowerCase();\n  return (v === 'on' || v === 'true');\n}\n\nmsg.state = {\n  alarm: str(ENT.alarm),\n  windows: str(ENT.windows),\n  windows_long_open: !!flow.get('windows_long_open'),\n  co2: num(ENT.co2),\n  intake_temp: num(ENT.intake_temp),\n  outdoor: num(ENT.outdoor),\n  humidity: num(ENT.humidity),\n  stopflags: str(ENT.stopflags),\n  recup: str(ENT.recup),\n  mode: str(ENT.mode),\n  fan_actual: num(ENT.fan_actual),\n  boost_active_ha: (bool(ENT.boost_ha) === true)\n};\n\n// Alarm fallback\nif (msg.state.alarm) flow.set('alarm_last_known', msg.state.alarm);\nelse {\n  const last = flow.get('alarm_last_known');\n  if (last) msg.state.alarm = last;\n}\n\n// Mode fallback\nif (msg.state.mode) flow.set('mode_last_known', msg.state.mode);\nelse {\n  const lastMode = flow.get('mode_last_known');\n  if (lastMode) msg.state.mode = lastMode;\n}\n\nmsg.state.recup_is_on = (String(msg.state.recup || '').toLowerCase() === 'on');\n\n// Day/Night\nconst d = new Date();\nconst mins = d.getHours() * 60 + d.getMinutes();\nlet isNight = (mins >= 22 * 60 || mins < 7 * 60);\nmsg.state.is_night = isNight;\nmsg.state.is_day = !isNight;\n\n// STOP FLAGS active\nconst stopRaw = (msg.state.stopflags ?? '');\nconst stop = String(stopRaw).trim().toLowerCase();\nconst stopActive = stop && ['none','unknown','unavailable',''].indexOf(stop) === -1;\n\n// Node status\nlet parts = [];\nparts.push(isNight ? 'NIGHT' : 'DAY');\nif (isNum(msg.state.co2)) parts.push('CO2 ' + Math.round(msg.state.co2));\nif (msg.state.windows_long_open) parts.push('WIN_LONG');\nif (stopActive) parts.push('STOP!');\nparts.push(msg.state.recup_is_on ? 'RECUP ON' : 'RECUP OFF');\nif (msg.state.mode) parts.push('MODE ' + msg.state.mode);\nif (msg.state.boost_active_ha) parts.push('BOOST_HA');\n\nnode.status({ fill: stopActive ? 'red' : (msg.state.windows_long_open ? 'yellow' : 'green'), shape: 'dot', text: parts.join(' | ') });\n\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 410,
-        "y": 340,
+        "x": 330,
+        "y": 320,
         "wires": [
             [
                 "afaa6514b50bd0d1"
@@ -466,7 +466,7 @@
         "func": "// ARMED_AWAY boost šaka\n// - OUT1: visada perduodam msg toliau\n// - OUT2: start signalas tik jei desired.armedBoost=true\n\nconst d = msg.desired || {};\nif (d.armedBoost === true) return [msg, { topic: 'armed_boost_start' }];\nreturn [msg, null];",
         "outputs": 2,
         "noerr": 0,
-        "x": 880,
+        "x": 660,
         "y": 260,
         "wires": [
             [
@@ -494,8 +494,8 @@
         "bytopic": "all",
         "topic": "topic",
         "outputs": 1,
-        "x": 1180,
-        "y": 280,
+        "x": 940,
+        "y": 300,
         "wires": [
             [
                 "02efe7147852339c"
@@ -510,8 +510,8 @@
         "func": "// Priverstinis išjungimas po ARMED_AWAY boost\n\nmsg.desired = { on: false, fan: null, ovr: false, notify: null, armedBoost: false };\nmsg.reason = 'ARMED_AWAY_BOOST_END';\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 1490,
-        "y": 280,
+        "x": 1230,
+        "y": 240,
         "wires": [
             [
                 "118f45740d8cca53",
@@ -531,8 +531,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1140,
-        "y": 220,
+        "x": 900,
+        "y": 240,
         "wires": [
             [
                 "57379c1161d069ae"
@@ -551,8 +551,8 @@
         "septopics": false,
         "property": "desired_key",
         "topi": "topic",
-        "x": 1370,
-        "y": 220,
+        "x": 1110,
+        "y": 160,
         "wires": [
             [
                 "03c9f68a6306d0f7"
@@ -567,8 +567,8 @@
         "func": "// Veiksmų sąrašo sudarymas (msg.payload = array)\n// - Fan ribojamas 20–100%\n// - OVR relė valdoma atskirai\n\nconst d = msg.desired || {};\n\nconst ENT = {\n  start_stop: 'switch.start_stop',\n  intake: 'number.intake_level_1',\n  exhaust: 'number.exhaust_level_1',\n  ovr_relay: 'switch.recup_switch_relay'\n};\n\nlet actions = [];\n\nif (d.on === true) actions.push({ kind: 'switch_on', entity_id: ENT.start_stop });\nelse actions.push({ kind: 'switch_off', entity_id: ENT.start_stop });\n\nif (d.on === true && d.fan !== null && d.fan !== undefined) {\n  const v = Math.max(20, Math.min(100, Math.round(d.fan)));\n  actions.push({ kind: 'set_number', entity_id: ENT.intake, value: v });\n  actions.push({ kind: 'set_number', entity_id: ENT.exhaust, value: v });\n}\n\nactions.push({ kind: (d.ovr === true ? 'switch_on' : 'switch_off'), entity_id: ENT.ovr_relay });\n\nmsg.payload = actions;\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 1590,
-        "y": 220,
+        "x": 1310,
+        "y": 160,
         "wires": [
             [
                 "4bb52c2dad9dd21c"
@@ -587,8 +587,8 @@
         "stream": false,
         "addname": "idx",
         "property": "payload",
-        "x": 1770,
-        "y": 220,
+        "x": 1470,
+        "y": 160,
         "wires": [
             [
                 "ea893bb7bc4c48d8"
@@ -622,8 +622,8 @@
         "checkall": "true",
         "repair": false,
         "outputs": 3,
-        "x": 1800,
-        "y": 280,
+        "x": 1180,
+        "y": 380,
         "wires": [
             [
                 "f367b47cb7301ea8"
@@ -644,8 +644,8 @@
         "func": "// Paruošia payload switch.turn_on servisui\n\nconst a = msg.payload;\nif (!a?.entity_id) return null;\nmsg.payload = { entity_id: a.entity_id };\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 2020,
-        "y": 220,
+        "x": 1420,
+        "y": 320,
         "wires": [
             [
                 "40d2f5fb0c4ad4f6"
@@ -660,8 +660,8 @@
         "func": "// Paruošia payload switch.turn_off servisui\n\nconst a = msg.payload;\nif (!a?.entity_id) return null;\nmsg.payload = { entity_id: a.entity_id };\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 2020,
-        "y": 280,
+        "x": 1420,
+        "y": 380,
         "wires": [
             [
                 "e8d94a554d178150"
@@ -676,8 +676,8 @@
         "func": "// Paruošia payload number.set_value servisui\n\nconst a = msg.payload;\nif (!a?.entity_id) return null;\nconst val = Number(a.value);\nif (!isFinite(val)) return null;\nmsg.payload = { entity_id: a.entity_id, value: val };\nreturn msg;",
         "outputs": 1,
         "noerr": 0,
-        "x": 2030,
-        "y": 340,
+        "x": 1430,
+        "y": 440,
         "wires": [
             [
                 "2dd09e4941657b78"
@@ -696,7 +696,7 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 620,
+        "x": 400,
         "y": 420,
         "wires": [
             [
@@ -715,15 +715,15 @@
         "type": "function",
         "z": "d6b318ccac07d1e5",
         "name": "Build Control Log Record",
-        "func": "// schema v4 control record -> siunčiam į Logging modulį per link out\n// Tikslas: turėti \"kodėl\" + vidinius state'us fazėms B/C.\n// boost_active_ha pašalintas (vienas source of truth – boost_active)\n\nconst TZ = 'Europe/Vilnius';\nconst s = msg.state || {};\nconst d = msg.desired || {};\n\nfunction ltIso(tsDate) {\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ,\n    year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', second: '2-digit',\n    hour12: false\n  }).format(tsDate).replace(' ', 'T');\n}\n\nconst now = new Date();\nconst ts = ltIso(now);\nconst dow = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(now);\nconst hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hour12: false }).format(now));\n\n// Versijos iš global (vienas šaltinis)\nconst schemaVer = Number(global.get('schema_ver') || '');\nconst flowVer = String(global.get('system_version') || '');\n\n// Rate = tas pats stabilizuotas telemetry_rate (per Decide node)\nconst rate = (typeof msg._rate === 'number' && isFinite(msg._rate))\n  ? Number(msg._rate.toFixed(2))\n  : 0;\n\n// Boost – vienintelis source of truth (NR internal)\nconst boost_active = (flow.get('rate_boost_active') === true);\n\n// Mode su fallback (apsauga nuo HA unknown)\nconst mode = (s.mode && String(s.mode).trim())\n  ? String(s.mode).trim()\n  : (flow.get('mode_last_known') || null);\n\nlet fan_actual = (s.fan_actual !== null && s.fan_actual !== undefined && isFinite(s.fan_actual))\n  ? Math.round(Number(s.fan_actual))\n  : null;\n\nlet fan_desired = (d.fan !== null && d.fan !== undefined && isFinite(d.fan))\n  ? Math.round(Number(d.fan))\n  : null;\n\nconst rec = {\n  schema_ver: schemaVer,\n  flow_ver: flowVer,\n  module: 'control',\n  kind: 'decision',\n\n  ts,\n  occupied: (String(s.alarm || '') === 'disarmed'),\n  alarm_state: (s.alarm ? String(s.alarm) : null),\n  dow,\n  hour,\n  is_night: !!s.is_night,\n\n  mode,\n\n  // === Automatika (source of truth) ===\n  boost_active,\n  reason: (msg.reason || null),\n  stop_active: (msg._stopActive === true),\n  ovr_active: (d.ovr === true),\n  windows_long_open: !!s.windows_long_open,\n  co2_threshold: (typeof msg._co2Threshold === 'number' && isFinite(msg._co2Threshold))\n    ? msg._co2Threshold\n    : null,\n\n  fan_actual,\n  fan_desired,\n\n  co2: (s.co2 === undefined ? null : s.co2),\n  rate,\n\n  boost_confirmations: (typeof msg._boostConfirmations === 'number') ? msg._boostConfirmations : 0,\n  boost_hold_until: (typeof msg._boostHoldUntil === 'number') ? msg._boostHoldUntil : 0,\n  boost_last_start: (typeof msg._boostLastStart === 'number') ? msg._boostLastStart : 0,\n  boost_cooldown_active: (msg._cooldownActive === true),\n\n  outdoor: (s.outdoor === undefined ? null : s.outdoor),\n  humidity: (s.humidity === undefined ? null : s.humidity)\n};\n\nmsg.log_type = 'control';\nmsg.log_record = rec;\n\nreturn msg;",
+        "func": "// schema v5 control record -> siunčiam į Logging modulį per link out\n// Tikslas: turėti \"kodėl\" + vidinius state'us + tiekiamą temperatūrą\n// boost_active_ha pašalintas (vienas source of truth – boost_active)\n\nconst TZ = 'Europe/Vilnius';\nconst s = msg.state || {};\nconst d = msg.desired || {};\n\nfunction ltIso(tsDate) {\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ,\n    year: 'numeric', month: '2-digit', day: '2-digit',\n    hour: '2-digit', minute: '2-digit', second: '2-digit',\n    hour12: false\n  }).format(tsDate).replace(' ', 'T');\n}\n\nconst now = new Date();\nconst ts = ltIso(now);\nconst dow = new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday: 'short' }).format(now);\nconst hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hour12: false }).format(now));\n\n// Versijos iš global (atnaujinam schemą į 5 dėl pridėtos temperatūros)\nconst schemaVer = 5;\nconst flowVer = String(global.get('system_version') || '4.3.1');\n\n// Rate = tas pats stabilizuotas telemetry_rate (per Decide node)\nconst rate = (typeof msg._rate === 'number' && isFinite(msg._rate))\n  ? Number(msg._rate.toFixed(2))\n  : 0;\n\n// Boost – vienintelis source of truth (NR internal)\nconst boost_active = (flow.get('rate_boost_active') === true);\n\n// Mode su fallback (apsauga nuo HA unknown)\nconst mode = (s.mode && String(s.mode).trim())\n  ? String(s.mode).trim()\n  : (flow.get('mode_last_known') || null);\n\nlet fan_actual = (s.fan_actual !== null && s.fan_actual !== undefined && isFinite(s.fan_actual))\n  ? Math.round(Number(s.fan_actual))\n  : null;\n\nlet fan_desired = (d.fan !== null && d.fan !== undefined && isFinite(d.fan))\n  ? Math.round(Number(d.fan))\n  : null;\n\nconst rec = {\n  schema_ver: schemaVer,\n  flow_ver: flowVer,\n  module: 'control',\n  kind: 'decision',\n\n  ts,\n  occupied: (String(s.alarm || '') === 'disarmed'),\n  alarm_state: (s.alarm ? String(s.alarm) : null),\n  dow,\n  hour,\n  is_night: !!s.is_night,\n\n  mode,\n\n  // === Automatika (source of truth) ===\n  boost_active,\n  reason: (msg.reason || null),\n  stop_active: (msg._stopActive === true),\n  ovr_active: (d.ovr === true),\n  windows_long_open: !!s.windows_long_open,\n  co2_threshold: (typeof msg._co2Threshold === 'number' && isFinite(msg._co2Threshold))\n    ? msg._co2Threshold\n    : null,\n\n  fan_actual,\n  fan_desired,\n\n  co2: (s.co2 === undefined ? null : s.co2),\n  rate,\n\n  boost_confirmations: (typeof msg._boostConfirmations === 'number') ? msg._boostConfirmations : 0,\n  boost_hold_until: (typeof msg._boostHoldUntil === 'number') ? msg._boostHoldUntil : 0,\n  boost_last_start: (typeof msg._boostLastStart === 'number') ? msg._boostLastStart : 0,\n  boost_cooldown_active: (msg._cooldownActive === true),\n\n  outdoor: (s.outdoor === undefined ? null : s.outdoor),\n  humidity: (s.humidity === undefined ? null : s.humidity),\n  intake_temp: (s.intake_temp === undefined ? null : s.intake_temp) // NAUJAS LAUKAS ISTORIJAI\n};\n\nmsg.log_type = 'control';\nmsg.log_record = rec;\n\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 870,
-        "y": 340,
+        "x": 850,
+        "y": 380,
         "wires": [
             [
                 "c646ce57ddf57568"
@@ -739,8 +739,8 @@
         "links": [
             "976aa247b41e78d0"
         ],
-        "x": 1105,
-        "y": 340,
+        "x": 1005,
+        "y": 380,
         "wires": []
     },
     {
@@ -751,8 +751,8 @@
         "links": [
             "567de76b7fee6e80"
         ],
-        "x": 130,
-        "y": 740,
+        "x": 520,
+        "y": 40,
         "wires": [
             [
                 "fc659852591d8764"
@@ -764,15 +764,15 @@
         "type": "function",
         "z": "d6b318ccac07d1e5",
         "name": "AI: Build Control Context",
-        "func": "// Paruošia išsamų kontekstą Telegram/Gemini flow'ui.\nlet ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\n\nfunction getState(ent) {\n  const raw = states?.[ent]?.state;\n  if (raw === undefined || raw === null) return null;\n  const s = String(raw);\n  if (['unknown', 'unavailable'].includes(s.toLowerCase())) return null;\n  return s;\n}\n\nfunction getNum(ent) {\n  const s = getState(ent);\n  if (s === null) return null;\n  const v = parseFloat(s);\n  return isFinite(v) ? v : null;\n}\n\n// 1. Ištraukiam CO2 slenkstį (iš global arba HA)\nconst co2_threshold = global.get('komfovent.auto_co2_on_threshold') ||\n  global.get('auto_co2_on_threshold') ||\n  getNum('input_number.co2_on_threshold');\n\n// 2. Ištraukiam mokymosi statusą iš flow\nconst learning = flow.get('learning_last_update') || null;\n\n// 3. Suformuojam praturtintą kontekstą\nconst ctx = {\n  ts: new Date().toLocaleString('lt-LT', { timeZone: 'Europe/Vilnius' }),\n\n  // JUTIKLIAI\n  co2: getNum('sensor.oro_stotele_carbon_dioxide'),\n  outdoor: getNum('sensor.boiler_outside_temperature'),\n  humidity: getNum('sensor.bathroom_humidity'),\n\n  // LOGIKOS PARAMETRAI\n  co2_threshold: co2_threshold,\n  learning_active: !!learning,\n  learning_profile: learning ? learning.profile : 'n/a',\n  last_learning_delta: learning ? learning.delta : 0,\n\n  // BŪSENOS\n  mode: getState('sensor.komfovent_logic_2') || flow.get('mode_last_known') || 'n/a',\n  alarm: getState('alarm_control_panel.home'),\n\n  // BOOST STATUSAS (Source of Truth)\n  // Pašalintas boost_active_ha, kad AI nebesipainiotų tarp dviejų šaltinių\n  boost_active: (flow.get('rate_boost_active') === true),\n\n  // VENTILIATORIAI\n  fan_actual: getNum('sensor.intake_fan_level_current'),\n  fan_desired: (() => {\n    const d = flow.get('last_desired');\n    return (d && isFinite(d.fan)) ? Math.round(d.fan) : getNum('sensor.komfovent_fan_desired');\n  })(),\n\n  // APSAUGOS IR FILTRAI\n  windows_long_open: !!flow.get('windows_long_open'),\n  filter_timer: getNum('sensor.komfovent_filter_timer')\n};\n\nmsg.ai_context = ctx;\nnode.status({ fill: \"blue\", shape: \"dot\", text: `Context: CO2 ${ctx.co2} | Thr ${ctx.co2_threshold} | Boost ${ctx.boost_active}` });\nreturn msg;",
+        "func": "// Paruošia išsamų kontekstą Telegram/Gemini flow'ui.\nlet ha = global.get('homeassistant') || {};\nlet states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\n\nfunction getState(ent) {\n  const raw = states?.[ent]?.state;\n  if (raw === undefined || raw === null) return null;\n  const s = String(raw);\n  if (['unknown', 'unavailable'].includes(s.toLowerCase())) return null;\n  return s;\n}\n\nfunction getNum(ent) {\n  const s = getState(ent);\n  if (s === null) return null;\n  const v = parseFloat(s);\n  return isFinite(v) ? v : null;\n}\n\n// 1. Ištraukiam CO2 slenkstį (iš global arba HA)\nconst co2_threshold = global.get('komfovent.auto_co2_on_threshold') ||\n  global.get('auto_co2_on_threshold') ||\n  getNum('input_number.co2_on_threshold');\n\n// 2. Ištraukiam mokymosi statusą iš flow\nconst learning = flow.get('learning_last_update') || null;\n\n// 3. Suformuojam praturtintą kontekstą\nconst ctx = {\n  ts: new Date().toLocaleString('lt-LT', { timeZone: 'Europe/Vilnius' }),\n\n  // JUTIKLIAI\n  co2: getNum('sensor.oro_stotele_carbon_dioxide'),\n  outdoor: getNum('sensor.boiler_outside_temperature'),\n  humidity: getNum('sensor.bathroom_humidity'),\n  intake_temp: getNum('sensor.intake_air_temperature'), // PRIDĖTA\n\n  // LOGIKOS PARAMETRAI\n  co2_threshold: co2_threshold,\n  learning_active: !!learning,\n  learning_profile: learning ? learning.profile : 'n/a',\n  last_learning_delta: learning ? learning.delta : 0,\n\n  // BŪSENOS\n  mode: getState('sensor.komfovent_logic_2') || flow.get('mode_last_known') || 'n/a',\n  alarm: getState('alarm_control_panel.home'),\n  ovr_active: (flow.get('bath_ovr_active') === true), // PRIDĖTA: Išorinio valdymo statusas\n\n  // BOOST STATUSAS (Source of Truth)\n  boost_active: (flow.get('rate_boost_active') === true),\n\n  // VENTILIATORIAI\n  fan_actual: getNum('sensor.intake_fan_level_current'),\n  fan_desired: (() => {\n    const d = flow.get('last_desired');\n    return (d && isFinite(d.fan)) ? Math.round(d.fan) : getNum('sensor.komfovent_fan_desired');\n  })(),\n\n  // APSAUGOS IR FILTRAI\n  windows_long_open: !!flow.get('windows_long_open'),\n  filter_timer: getNum('sensor.komfovent_filter_timer')\n};\n\nmsg.ai_context = ctx;\nnode.status({\n  fill: \"blue\",\n  shape: \"dot\",\n  text: `Context: CO2 ${ctx.co2} | Temp ${ctx.intake_temp}°C | OVR ${ctx.ovr_active}`\n});\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 400,
-        "y": 740,
+        "x": 790,
+        "y": 40,
         "wires": [
             [
                 "a16e0aa2028bc8af"
@@ -788,8 +788,8 @@
         "links": [
             "2c73cea35fecb95c"
         ],
-        "x": 680,
-        "y": 740,
+        "x": 1070,
+        "y": 40,
         "wires": []
     },
     {
@@ -815,8 +815,8 @@
         "blockInputOverrides": false,
         "domain": "switch",
         "service": "turn_on",
-        "x": 2270,
-        "y": 220,
+        "x": 1670,
+        "y": 320,
         "wires": [
             []
         ]
@@ -844,8 +844,8 @@
         "blockInputOverrides": false,
         "domain": "switch",
         "service": "turn_off",
-        "x": 2270,
-        "y": 280,
+        "x": 1670,
+        "y": 380,
         "wires": [
             []
         ]
@@ -873,8 +873,8 @@
         "blockInputOverrides": false,
         "domain": "number",
         "service": "set_value",
-        "x": 2280,
-        "y": 340,
+        "x": 1680,
+        "y": 440,
         "wires": [
             []
         ]
@@ -891,8 +891,8 @@
         "attributes": [],
         "inputOverride": "allow",
         "outputProperties": [],
-        "x": 860,
-        "y": 420,
+        "x": 620,
+        "y": 380,
         "wires": [
             []
         ]
@@ -909,8 +909,8 @@
         "attributes": [],
         "inputOverride": "allow",
         "outputProperties": [],
-        "x": 900,
-        "y": 480,
+        "x": 640,
+        "y": 440,
         "wires": [
             []
         ]
@@ -927,10 +927,80 @@
         "attributes": [],
         "inputOverride": "allow",
         "outputProperties": [],
-        "x": 870,
-        "y": 540,
+        "x": 630,
+        "y": 500,
         "wires": [
             []
+        ]
+    },
+    {
+        "id": "fe6067cc4e78c83c",
+        "type": "delay",
+        "z": "d6b318ccac07d1e5",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "10",
+        "timeoutUnits": "seconds",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 440,
+        "y": 180,
+        "wires": [
+            [
+                "a5a6b6eee1362ade"
+            ]
+        ]
+    },
+    {
+        "id": "b63440c4ee46ed48",
+        "type": "server-state-changed",
+        "z": "d6b318ccac07d1e5",
+        "name": "Intake air temperature",
+        "server": "de0e06cd.8456e8",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "sensor.intake_air_temperature"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": true,
+        "stateType": "num",
+        "ifState": "",
+        "ifStateType": "str",
+        "outputOnlyOnStateChange": true,
+        "for": "1",
+        "forType": "num",
+        "forUnits": "minutes",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "outputProperties": [
+            {
+                "property": "topic",
+                "propertyType": "msg",
+                "value": "intake_temp",
+                "valueType": "str"
+            }
+        ],
+        "x": 160,
+        "y": 660,
+        "wires": [
+            [
+                "a5a6b6eee1362ade"
+            ]
         ]
     },
     {
@@ -1043,7 +1113,7 @@
         "debugEnabled": false
     },
     {
-        "id": "0535bf6f7c39af7e",
+        "id": "227c0a8d46903023",
         "type": "global-config",
         "env": [],
         "modules": {
