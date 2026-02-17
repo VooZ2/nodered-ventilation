@@ -65,6 +65,24 @@ Sistemoje integruotas **Gemini** (Google AI) gateway modulis, veikiantis kaip v�
 
 ---
 
+## 📊 Telemetrija ir Vizualizacija (HD)
+
+Sistema užtikrina pilną duomenų skaidrumą realiuoju laiku. Visi kritiniai parametrai yra vizualizuojami didelės raiškos (HD) prietaisų skydelyje, leidžiančiame stebėti ne tik esamą būseną, bet ir istorinius pokyčius.
+
+### 🔍 Skydelio galimybės
+
+* **Realaus laiko rodikliai**: Tikslus $CO_2$ lygis (ppm), temperatūra (°C), oro drėgmė (%) ir momentinis energijos suvartojimas (W).
+* **Sistemos būsenos**: Aiškus vėdinimo režimų (Diena/Naktis), filtrų nusidėvėjimo (2.3 d. iki patikros) ir klaidų pranešimų (Alarm) stebėjimas.
+* **Interaktyvūs grafikai**: 
+    * **Vėdinimo intensyvumas**: Ventiliatorių greičio (%) koreliacija su nustatytu automatiniu slenksčiu (Threshold: 700 ppm).
+    * **Aplinkos dinamika**: Detalios drėgmės ir $CO_2$ kitimo kreivės, padedančios identifikuoti namų mikroklimato dėsningumus.
+* **Efektyvumo analizė**: Sukauptos elektros energijos sąnaudos (kWh) pagal dienas ir mėnesius, leidžiančios optimizuoti sistemos kaštus.
+
+<img width="1652" height="1115" alt="Screenshot 2026-02-17 at 09 21 01" src="https://github.com/user-attachments/assets/f85249c9-f6d1-405a-8661-0a2364c896bd" />
+
+
+---
+
 ## 🧹 Filtrų Stebėjimas
 
 Specializuotas modulis filtrų užterštumo ir efektyvumo sekimui.
@@ -95,7 +113,3 @@ Sukurta maksimaliam patikimumui užtikrinti (*High Availability*):
 ## 🔢 Versija (Version)
 
 **v4.3.1** — Pilna Gemini integracija, suvienodinti Snapshot logai, įdiegtas protingas laiko zonų valdymas.
-
----
-
-<img width="1353" height="876" alt="Screenshot 2026-02-12 at 22 44 38" src="https://github.com/user-attachments/assets/1fe7d7c5-12a0-4346-b5e2-797aa92df2a8" />
