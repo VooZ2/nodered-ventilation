@@ -65,9 +65,9 @@ Sistemoje integruotas **Gemini** (Google AI) gateway modulis, veikiantis kaip v�
 
 ---
 
-## 📊 Telemetrija ir Vizualizacija (HD)
+## 📊 Telemetrija ir Vizualizacija
 
-Sistema užtikrina pilną duomenų skaidrumą realiuoju laiku. Visi kritiniai parametrai yra vizualizuojami didelės raiškos (HD) prietaisų skydelyje, leidžiančiame stebėti ne tik esamą būseną, bet ir istorinius pokyčius.
+Sistema užtikrina pilną duomenų skaidrumą realiuoju laiku. Visi kritiniai parametrai yra vizualizuojami, leidžiančiame stebėti ne tik esamą būseną, bet ir istorinius pokyčius.
 
 ### 🔍 Skydelio galimybės
 
