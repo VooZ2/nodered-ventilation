@@ -779,7 +779,11 @@
         "debugEnabled": false
     },
     {
+<<<<<<< HEAD
         "id": "64846dec25cdacad",
+=======
+        "id": "2d036305f1bf7013",
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
         "type": "global-config",
         "env": [],
         "modules": {

@@ -1,15 +1,25 @@
 [
     {
+<<<<<<< HEAD
         "id": "c16e5224b33b730b",
+=======
+        "id": "b7e2a9f5d0c6a1a1",
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
         "type": "tab",
         "label": "Komfovent - Module: Auto-Learning",
         "disabled": false,
         "info": "Sampling (10 min) + 03:00 Threshold Update (HA sync) + Daily Audit (telemetry/control/predictive) + AI reply."
     },
     {
+<<<<<<< HEAD
         "id": "cec3be0df19147e8",
         "type": "inject",
         "z": "c16e5224b33b730b",
+=======
+        "id": "a1c0d1b2e3f4a501",
+        "type": "inject",
+        "z": "b7e2a9f5d0c6a1a1",
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
         "name": "Scheduler: CO2 Sample (10 min)",
         "props": [
             {
@@ -26,15 +36,24 @@
         "onceDelay": 2,
         "topic": "co2_sample",
         "payloadType": "date",
+<<<<<<< HEAD
         "x": 200,
         "y": 40,
         "wires": [
             [
                 "85994e548f657a78"
+=======
+        "x": 180,
+        "y": 40,
+        "wires": [
+            [
+                "f1a2b3c4d5e6f701"
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
             ]
         ]
     },
     {
+<<<<<<< HEAD
         "id": "85994e548f657a78",
         "type": "function",
         "z": "c16e5224b33b730b",
@@ -47,26 +66,56 @@
         "wires": [
             [
                 "6e97cc09e127b287"
+=======
+        "id": "f1a2b3c4d5e6f701",
+        "type": "function",
+        "z": "b7e2a9f5d0c6a1a1",
+        "name": "Learning: CO2 Sample",
+        "func": "// CO2 sample (10 min)\n// - Robust HA cache nuskaitymas\n// - Flow co2_log (iki 10 dienų @10 min = 1440 įrašų)\n// - Global last_co2 cache (Predictive patogumui)\n// - Log record -> Logging modulis (schema/versijas uždės Logging Normalize)\n\nconst TZ = 'Europe/Vilnius';\nconst ents = global.get('komfovent_entities') || {};\n\nlet ha = global.get('homeassistant') || {};\nlet states =\n  (ha?.homeAssistant?.states) ||\n  (ha?.homeassistant?.states) ||\n  (ha?.states) ||\n  {};\n\nfunction isBad(v){\n  if (v === null || v === undefined) return true;\n  const s = String(v).trim().toLowerCase();\n  return (s === '' || s === 'unknown' || s === 'unavailable');\n}\nfunction isNum(v){ return v !== null && v !== undefined && Number.isFinite(Number(v)); }\nfunction numOrNull(v){ const n = Number(v); return Number.isFinite(n) ? n : null; }\nfunction ltIso(date){\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ, year:'numeric', month:'2-digit', day:'2-digit',\n    hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false\n  }).format(date).replace(' ', 'T');\n}\n\nconst ENT = {\n  alarm: ents.alarm || 'alarm_control_panel.home',\n  co2: ents.co2 || 'sensor.oro_stotele_carbon_dioxide',\n  mode: ents.mode || 'sensor.komfovent_logic_2'\n};\n\nconst now = new Date();\nconst ts = ltIso(now);\n\n// alarm su fallback\nlet alarmState = isBad(states?.[ENT.alarm]?.state) ? (flow.get('alarm_last_known') || null) : String(states[ENT.alarm].state);\nif (alarmState) flow.set('alarm_last_known', alarmState);\n\n// mode su fallback\nlet mode = isBad(states?.[ENT.mode]?.state) ? (flow.get('mode_last_known') || null) : String(states[ENT.mode].state);\nif (mode) flow.set('mode_last_known', mode);\n\n// co2\nconst co2Raw = states?.[ENT.co2]?.state;\nconst co2 = (!isBad(co2Raw) && isNum(co2Raw)) ? Math.round(Number(co2Raw)) : null;\nif (!isNum(co2) || co2 < 300) return null;\n\n// flow co2_log\nlet logs = flow.get('co2_log');\nif (!Array.isArray(logs)) logs = [];\nlogs.push({ ts: now.getTime(), val: co2, alarm: alarmState });\nwhile (logs.length > 1440) logs.shift();\nflow.set('co2_log', logs);\n\n// global last\nglobal.set('komfovent.last_co2', co2);\nglobal.set('komfovent.last_co2_ts', now.getTime());\n\nmsg.log_type = 'learning';\nmsg.log_record = {\n  module: 'learning',\n  kind: 'snapshot',\n  ts,\n  occupied: (String(alarmState) === 'disarmed'),\n  alarm_state: alarmState,\n  dow: new Intl.DateTimeFormat('en-US', { timeZone: TZ, weekday:'short' }).format(now),\n  hour: Number(new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour:'2-digit', hour12:false }).format(now)),\n  mode: mode || null,\n  co2,\n  event: 'co2_sample'\n};\n\nnode.status({ fill: 'blue', shape: 'dot', text: `co2 ${co2} | alarm ${alarmState || 'n/a'} | mode ${mode || 'n/a'}` });\nreturn msg;\n",
+        "outputs": 1,
+        "noerr": 0,
+        "x": 460,
+        "y": 40,
+        "wires": [
+            [
+                "c0ffee1234ab0001"
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
             ]
         ]
     },
     {
+<<<<<<< HEAD
         "id": "6e97cc09e127b287",
         "type": "link out",
         "z": "c16e5224b33b730b",
+=======
+        "id": "c0ffee1234ab0001",
+        "type": "link out",
+        "z": "b7e2a9f5d0c6a1a1",
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
         "name": "Log Out: Learning",
         "mode": "link",
         "links": [
             "b94f8a643031659c"
         ],
+<<<<<<< HEAD
         "x": 645,
+=======
+        "x": 615,
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
         "y": 40,
         "wires": []
     },
     {
+<<<<<<< HEAD
         "id": "1882326f953f7e9b",
         "type": "inject",
         "z": "c16e5224b33b730b",
+=======
+        "id": "a1c0d1b2e3f4a502",
+        "type": "inject",
+        "z": "b7e2a9f5d0c6a1a1",
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
         "name": "Scheduler: 03:00 Nightly",
         "props": [
             {
@@ -83,35 +132,63 @@
         "onceDelay": 0.1,
         "topic": "nightly",
         "payloadType": "date",
+<<<<<<< HEAD
         "x": 170,
         "y": 100,
         "wires": [
             [
                 "78411d3197e72128"
+=======
+        "x": 150,
+        "y": 100,
+        "wires": [
+            [
+                "f1a2b3c4d5e6f702",
+                "ab3bcab92b362d8a"
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
             ]
         ]
     },
     {
+<<<<<<< HEAD
         "id": "78411d3197e72128",
         "type": "function",
         "z": "c16e5224b33b730b",
         "name": "Learning: Compute Threshold",
         "func": "// 03:00 Threshold update (paprasta, bet stabili heuristika)\n// - Naudoja flow.co2_log\n// - Skaičiuoja p95 iš occupied=true įrašų\n// - Guard: clamp 650..1100, step limit +/-50 per dieną\n// - Nustato global.komfovent.auto_co2_on_threshold\n// - msg.threshold_changed + msg.ha.value HA sync'ui\n// - Log record (learning_update)\n\nconst TZ = 'Europe/Vilnius';\n\nfunction ltIso(d){\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ, year:'numeric', month:'2-digit', day:'2-digit',\n    hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false\n  }).format(d).replace(' ', 'T');\n}\nfunction clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }\nfunction isNum(v){ return v !== null && v !== undefined && Number.isFinite(Number(v)); }\n\nconst now = new Date();\nconst ts = ltIso(now);\n\nlet logs = flow.get('co2_log');\nif (!Array.isArray(logs) || logs.length < 20) {\n  msg.threshold_changed = false;\n  msg.ha = { value: null };\n  msg.log_type = 'learning';\n  msg.log_record = {\n    module: 'learning',\n    kind: 'learning_update',\n    ts,\n    event: 'threshold_update',\n    note: 'insufficient co2_log'\n  };\n  node.status({ fill:'yellow', shape:'dot', text:'03:00 threshold: insufficient co2_log' });\n  return msg;\n}\n\nconst occupiedSamples = logs\n  .filter(p => p && isNum(p.val) && String(p.alarm) === 'disarmed' && p.hood_effect !== true)\n  .map(p => Number(p.val));\n\nif (occupiedSamples.length < 20) {\n  msg.threshold_changed = false;\n  msg.ha = { value: null };\n  msg.log_type = 'learning';\n  msg.log_record = {\n    module: 'learning',\n    kind: 'learning_update',\n    ts,\n    event: 'threshold_update',\n    note: 'insufficient occupied samples'\n  };\n  node.status({ fill:'yellow', shape:'dot', text:'03:00 threshold: insufficient occupied samples' });\n  return msg;\n}\n\noccupiedSamples.sort((a,b)=>a-b);\nconst idx95 = Math.floor(0.95 * (occupiedSamples.length - 1));\nconst p95 = occupiedSamples[idx95];\n\nconst prev = Number(global.get('komfovent.auto_co2_on_threshold') || 750);\nlet next = clamp(Math.round(p95), 650, 1100);\n\n// step guard\nconst maxStep = 50;\nif (next > prev + maxStep) next = prev + maxStep;\nif (next < prev - maxStep) next = prev - maxStep;\n\nconst changed = (Math.abs(next - prev) >= 5);\n\n// publish\nif (changed) global.set('komfovent.auto_co2_on_threshold', next);\n\nmsg.threshold_changed = changed;\nmsg.ha = { value: next };\n\nmsg.log_type = 'learning';\nmsg.log_record = {\n  module: 'learning',\n  kind: 'learning_update',\n  ts,\n  event: 'threshold_update',\n  prev_threshold: prev,\n  new_threshold: next,\n  changed,\n  n_total: logs.length,\n  n_occupied: occupiedSamples.length,\n  p95\n};\n\nnode.status({ fill: changed ? 'green' : 'blue', shape:'dot', text:`03:00 threshold ${prev} -> ${next} (${changed?'changed':'same'})` });\nreturn msg;\n",
+=======
+        "id": "f1a2b3c4d5e6f702",
+        "type": "function",
+        "z": "b7e2a9f5d0c6a1a1",
+        "name": "Learning: Compute Threshold",
+        "func": "// 03:00 Threshold update (paprasta, bet stabili heuristika)\n// - Naudoja flow.co2_log\n// - Skaičiuoja p95 iš occupied=true įrašų\n// - Guard: clamp 650..1100, step limit +/-50 per dieną\n// - Nustato global.komfovent.auto_co2_on_threshold\n// - msg.threshold_changed + msg.ha.value HA sync'ui\n// - Log record (learning_update)\n\nconst TZ = 'Europe/Vilnius';\n\nfunction ltIso(d){\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ, year:'numeric', month:'2-digit', day:'2-digit',\n    hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false\n  }).format(d).replace(' ', 'T');\n}\nfunction clamp(n,a,b){ return Math.max(a, Math.min(b, n)); }\nfunction isNum(v){ return v !== null && v !== undefined && Number.isFinite(Number(v)); }\n\nconst now = new Date();\nconst ts = ltIso(now);\n\nlet logs = flow.get('co2_log');\nif (!Array.isArray(logs) || logs.length < 20) {\n  msg.threshold_changed = false;\n  msg.ha = { value: null };\n  msg.log_type = 'learning';\n  msg.log_record = {\n    module: 'learning',\n    kind: 'learning_update',\n    ts,\n    event: 'threshold_update',\n    note: 'insufficient co2_log'\n  };\n  node.status({ fill:'yellow', shape:'dot', text:'03:00 threshold: insufficient co2_log' });\n  return msg;\n}\n\nconst occupiedSamples = logs\n  .filter(p => p && isNum(p.val) && String(p.alarm) === 'disarmed')\n  .map(p => Number(p.val));\n\nif (occupiedSamples.length < 20) {\n  msg.threshold_changed = false;\n  msg.ha = { value: null };\n  msg.log_type = 'learning';\n  msg.log_record = {\n    module: 'learning',\n    kind: 'learning_update',\n    ts,\n    event: 'threshold_update',\n    note: 'insufficient occupied samples'\n  };\n  node.status({ fill:'yellow', shape:'dot', text:'03:00 threshold: insufficient occupied samples' });\n  return msg;\n}\n\noccupiedSamples.sort((a,b)=>a-b);\nconst idx95 = Math.floor(0.95 * (occupiedSamples.length - 1));\nconst p95 = occupiedSamples[idx95];\n\nconst prev = Number(global.get('komfovent.auto_co2_on_threshold') || 750);\nlet next = clamp(Math.round(p95), 650, 1100);\n\n// step guard\nconst maxStep = 50;\nif (next > prev + maxStep) next = prev + maxStep;\nif (next < prev - maxStep) next = prev - maxStep;\n\nconst changed = (Math.abs(next - prev) >= 5);\n\n// publish\nif (changed) global.set('komfovent.auto_co2_on_threshold', next);\n\nmsg.threshold_changed = changed;\nmsg.ha = { value: next };\n\nmsg.log_type = 'learning';\nmsg.log_record = {\n  module: 'learning',\n  kind: 'learning_update',\n  ts,\n  event: 'threshold_update',\n  prev_threshold: prev,\n  new_threshold: next,\n  changed,\n  n_total: logs.length,\n  n_occupied: occupiedSamples.length,\n  p95\n};\n\nnode.status({ fill: changed ? 'green' : 'blue', shape:'dot', text:`03:00 threshold ${prev} -> ${next} (${changed?'changed':'same'})` });\nreturn msg;\n",
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
         "outputs": 1,
         "noerr": 0,
         "x": 440,
         "y": 100,
         "wires": [
             [
+<<<<<<< HEAD
                 "6e97cc09e127b287",
                 "028e8f2ad723dc99"
+=======
+                "c0ffee1234ab0001",
+                "a1c0d1b2e3f4a503"
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
             ]
         ]
     },
     {
+<<<<<<< HEAD
         "id": "028e8f2ad723dc99",
         "type": "switch",
         "z": "c16e5224b33b730b",
+=======
+        "id": "a1c0d1b2e3f4a503",
+        "type": "switch",
+        "z": "b7e2a9f5d0c6a1a1",
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
         "name": "HA Gate: Threshold Changed",
         "property": "threshold_changed",
         "propertyType": "msg",
@@ -127,14 +204,143 @@
         "y": 100,
         "wires": [
             [
+<<<<<<< HEAD
                 "b7c1af465692f1b8"
+=======
+                "a044758b47480375"
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
             ]
         ]
     },
     {
+<<<<<<< HEAD
         "id": "b7c1af465692f1b8",
         "type": "api-call-service",
         "z": "c16e5224b33b730b",
+=======
+        "id": "f1a2b3c4d5e6f703",
+        "type": "function",
+        "z": "b7e2a9f5d0c6a1a1",
+        "name": "Audit: Prepare Yesterday Command",
+        "func": "/**\n * Audit: Prepare Yesterday Command v6.1 (Bugfixed)\n * - Įtraukti visi 5 logų tipai (telemetry, control, predictive, filters, learning)\n * - Naudojamas tail -n 350, kad neviršytume Gemini konteksto lango\n * - Pridėtas failų egzistavimo tikrinimas\n */\n\nconst base = '/data/logs/komfovent';\nconst yesterday = new Date();\nyesterday.setDate(yesterday.getDate() - 1);\n\nconst ymd = new Intl.DateTimeFormat('sv-SE', {\n  timeZone: 'Europe/Vilnius',\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit'\n}).format(yesterday);\n\nmsg.audit_date = ymd;\n\n// Suformuojame failų sąrašą pilnai analizei\nconst logFiles = [\n  `komfovent_telemetry_${ymd}.jsonl`,\n  `komfovent_control_${ymd}.jsonl`,\n  `komfovent_predictive_${ymd}.jsonl`,\n  `komfovent_filters_${ymd}.jsonl`,\n  `komfovent_learning_${ymd}.jsonl`\n];\n\n// Bash komanda: iteruoja per sąrašą, spausdina antraštę ir ištraukia paskutines eilutes\nmsg.payload = `bash -lc 'for f in ${logFiles.map(name => `${base}/${name}`).join(' ')}; do ` +\n  `echo \\\"=== $(basename $f) ===\\\"; ` +\n  `if [ -f \\\"$f\\\" ]; then tail -n 350 \\\"$f\\\"; else echo \\\"(missing)\\\"; fi; ` +\n  `done'`;\n\nnode.status({ fill: \"blue\", shape: \"dot\", text: `Preparing logs for ${ymd}` });\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 450,
+        "y": 160,
+        "wires": [
+            [
+                "a1c0d1b2e3f4a505"
+            ]
+        ]
+    },
+    {
+        "id": "a1c0d1b2e3f4a505",
+        "type": "exec",
+        "z": "b7e2a9f5d0c6a1a1",
+        "command": "",
+        "addpay": "payload",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "winHide": false,
+        "oldrc": false,
+        "name": "Exec: Read Yesterday Logs",
+        "x": 740,
+        "y": 160,
+        "wires": [
+            [
+                "a1c0d1b2e3f4a506"
+            ],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "a1c0d1b2e3f4a506",
+        "type": "function",
+        "z": "b7e2a9f5d0c6a1a1",
+        "name": "AI: Build Gemini Audit Request",
+        "func": "const API_KEY = env.get('GEMINI_API_KEY');\nif (!API_KEY) return { ai_reply: true, payload: '⚠️ GEMINI_API_KEY nerastas.' };\n\n// Išvalome logus: paliekame tik esminius duomenis\nfunction clean(body) {\n  return body.split('\\n').filter(Boolean).map(line => {\n    try {\n      let d = JSON.parse(line);\n      // Pašaliname statinį triukšmą\n      const junk = ['schema_ver', 'flow_ver', 'module', 'kind', 'dow', 'hour'];\n      junk.forEach(k => delete d[k]);\n      return JSON.stringify(d);\n    } catch (e) { return line; }\n  }).join('\\n');\n}\n\nconst cleanBody = clean(msg.payload);\nconst matrix = global.get('prediction_matrix') || {};\nconst thr = global.get('komfovent.auto_co2_on_threshold') || 750;\n\nconst prompt = `Analizuok vėdinimo auditą (${msg.audit_date}). \nKONTEKSTAS: Slenkstis ${thr} ppm. Matrica: ${matrix.training_days_actual}d (${matrix.confidence_info?.level}).\n\nUŽDUOTYS:\n1. Z-SCORE: Identifikuok tik z_co2/z_rate > 2.0 atvejus. Ar Predictive modulis reagavo?\n2. LOGIKA: Ar fan laiku pakilo į 45/55%? Ar CO2 nekrenta išvykus?\n3. PREDICTIVE: Ar f60 prognozės pasitvirtino? Ar modelis tinkamas LIVE režimui?\n4. SISTEMA: Filtrų wear tempas ir klaidų žymos.\n\nAtsakyk techniškai, glaustai, boldink rodiklius.\n\nLOGAI:\n${cleanBody}`;\n\nmsg.payload = {\n  contents: [{ parts: [{ text: prompt }] }],\n  generationConfig: { temperature: 0.1, maxOutputTokens: 1000 }\n};\nmsg._is_audit = true;\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1030,
+        "y": 160,
+        "wires": [
+            [
+                "a1c0d1b2e3f4a507"
+            ]
+        ]
+    },
+    {
+        "id": "a1c0d1b2e3f4a507",
+        "type": "http request",
+        "z": "b7e2a9f5d0c6a1a1",
+        "name": "HTTP: Gemini Audit",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [],
+        "x": 720,
+        "y": 240,
+        "wires": [
+            [
+                "a1c0d1b2e3f4a508"
+            ]
+        ]
+    },
+    {
+        "id": "a1c0d1b2e3f4a508",
+        "type": "function",
+        "z": "b7e2a9f5d0c6a1a1",
+        "name": "AI: Format Audit Reply",
+        "func": "/**\n * AI: Format Audit Reply v6.1 (Bugfixed)\n * - Ištaisyta chatId problema: naktinis Scheduler neturi msg.chatId.\n * - Užtikrinama, kad ataskaita pasieks vartotoją naudojant ALLOWED ID.\n * - Naudoja Markdown formatavimą ir įtraukia matricos metaduomenis.\n */\n\n// Gauname patvirtintą vartotojo ID iš aplinkos arba globalių nustatymų\nconst ALLOWED = Number(env.get(\"MY_TELEGRAM_ID\")) || global.get(\"ALLOWED_TELEGRAM_ID\");\n\nlet text = msg.payload?.candidates?.[0]?.content?.parts?.[0]?.text;\ntext = String(text || 'Klaida gaunant Gemini atsakymą.').trim();\n\n// Generuojame ataskaitos laiką\nconst now = new Date();\nconst todayStr = new Intl.DateTimeFormat('sv-SE', {\n    timeZone: 'Europe/Vilnius',\n    year: 'numeric',\n    month: '2-digit',\n    day: '2-digit',\n    hour: '2-digit',\n    minute: '2-digit'\n}).format(now);\n\n// Paimame esamą matricos būseną iš globalios talpyklos (Phase B kontekstas)\nconst matrix = global.get('prediction_matrix') || {};\nconst trainingDays = matrix.training_days_actual || 0;\nconst confidence = matrix.confidence_info?.level || 'n/a';\n\nmsg.ai_reply = true;\nmsg.topic = 'komfovent_audit';\n\n// Formuojame galutinį Telegram pranešimą\nmsg.payload = {\n    // SVARBU: jei msg.chatId nėra (naktinis trigger), naudojame ALLOWED kintamąjį\n    chatId: msg.chatId || ALLOWED,\n    parse_mode: 'Markdown',\n    text:\n        `📊 *NAKTINIS AUDITAS* (${todayStr})\\n` +\n        `📅 Periodas: ${msg.audit_date}\\n` +\n        `🧠 Modelio branda: ${trainingDays}d. (${confidence})\\n` +\n        `━━━━━━━━━━━━━━━━━━━━\\n\\n` +\n        text +\n        `\\n\\n━━━━━━━━━━━━━━━━━━━━\\n` +\n        `💡 _Ataskaita sugeneruota automatiškai naudojant PILNUS paros logus._`\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 960,
+        "y": 240,
+        "wires": [
+            [
+                "c0ffee1234ab0002"
+            ]
+        ]
+    },
+    {
+        "id": "c0ffee1234ab0002",
+        "type": "link out",
+        "z": "b7e2a9f5d0c6a1a1",
+        "name": "AI Out: Reply",
+        "mode": "link",
+        "links": [
+            "2c73cea35fecb95c"
+        ],
+        "x": 1135,
+        "y": 240,
+        "wires": []
+    },
+    {
+        "id": "a044758b47480375",
+        "type": "api-call-service",
+        "z": "b7e2a9f5d0c6a1a1",
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
         "name": "HA Call: input_number.set_value",
         "server": "de0e06cd.8456e8",
         "version": 7,
@@ -163,6 +369,34 @@
         ]
     },
     {
+<<<<<<< HEAD
+=======
+        "id": "ab3bcab92b362d8a",
+        "type": "delay",
+        "z": "b7e2a9f5d0c6a1a1",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "10",
+        "timeoutUnits": "minutes",
+        "rate": "1",
+        "nbRateUnits": "1",
+        "rateUnits": "second",
+        "randomFirst": "1",
+        "randomLast": "5",
+        "randomUnits": "seconds",
+        "drop": false,
+        "allowrate": false,
+        "outputs": 1,
+        "x": 190,
+        "y": 160,
+        "wires": [
+            [
+                "f1a2b3c4d5e6f703"
+            ]
+        ]
+    },
+    {
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
         "id": "de0e06cd.8456e8",
         "type": "server",
         "name": "Home Assistant",
@@ -193,7 +427,11 @@
         "enableGlobalContextStore": true
     },
     {
+<<<<<<< HEAD
         "id": "18a25e34dc5b62c0",
+=======
+        "id": "3572bc61b4fadeef",
+>>>>>>> b58913592a75cf5a86b6acefe8a14e062f21f6ad
         "type": "global-config",
         "env": [],
         "modules": {
