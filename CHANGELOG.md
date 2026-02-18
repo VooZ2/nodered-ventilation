@@ -12,6 +12,19 @@ MAJOR.MINOR.PATCH
 
 ---
 
+## v4.4.1 — Bugfix (AI context + fan desired + hood/state consistency)
+
+### Pataisyta
+- **AI context (Control):** sutvarkytas `fan_desired` konteksto formavimas, kad būtų teisingai skaičiuojamas iš `flow.last_desired` ir atskirai pateikiami:
+  - `fan_desired_in`
+  - `fan_desired_out`
+  - `fan_desired` (kaip max iš IN/OUT, jei bent vienas yra validus)
+- **Logging (Control):** užtikrinta, kad į control log įrašoma `intake_temp` reikšmė kartu su `fan_desired_in/out` (istorijai ir analitikai).
+- **Actions/OVR:** patvirtintas ir sutvarkytas OVR relės valdymas „tik pasikeitus būsenai“, kad į HA nesiųstų perteklinių `switch_on/off` (mažiau triukšmo ir apkrovos).
+- **Hood state:** suderintas HOOD būsenos (active/post_run) sekimas ir `desired_key` įtraukimas (kad RBE teisingai praleistų fazių pasikeitimus).
+
+---
+
 ## [4.4.0] - 2026-02-18
 
 ### Gartraukio (HOOD) režimo integracija, atskiras IN/OUT valdymas ir stabilizuotas post-run mechanizmas
