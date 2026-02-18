@@ -27,7 +27,7 @@
         "topic": "LOAD_STATE",
         "payloadType": "date",
         "x": 160,
-        "y": 100,
+        "y": 40,
         "wires": [
             [
                 "5727ac44439894af"
@@ -46,8 +46,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 400,
-        "y": 100,
+        "x": 380,
+        "y": 40,
         "wires": [
             [
                 "9316598ffbb11967"
@@ -66,8 +66,8 @@
         "sendError": true,
         "encoding": "utf8",
         "allProps": false,
-        "x": 600,
-        "y": 100,
+        "x": 580,
+        "y": 40,
         "wires": [
             [
                 "0fffae41c314b8f3"
@@ -86,8 +86,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 770,
-        "y": 100,
+        "x": 780,
+        "y": 40,
         "wires": [
             []
         ]
@@ -101,8 +101,8 @@
             "9316598ffbb11967"
         ],
         "uncaught": false,
-        "x": 580,
-        "y": 160,
+        "x": 160,
+        "y": 380,
         "wires": [
             [
                 "0d20fc06523a5b4f"
@@ -121,8 +121,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 850,
-        "y": 160,
+        "x": 430,
+        "y": 380,
         "wires": [
             []
         ]
@@ -147,8 +147,8 @@
         "onceDelay": 1,
         "topic": "tick",
         "payloadType": "date",
-        "x": 120,
-        "y": 220,
+        "x": 130,
+        "y": 100,
         "wires": [
             [
                 "2554aa364d4e2b58"
@@ -172,8 +172,8 @@
         "onceDelay": 0.1,
         "topic": "FILTER_RESET_MANUAL",
         "payloadType": "date",
-        "x": 150,
-        "y": 280,
+        "x": 160,
+        "y": 160,
         "wires": [
             [
                 "a0d202dfdb3c0539"
@@ -194,8 +194,8 @@
         "outputProperties": [],
         "event_type": "mobile_app_notification_action",
         "exposeToHomeAssistant": false,
-        "x": 180,
-        "y": 340,
+        "x": 170,
+        "y": 280,
         "wires": [
             [
                 "a0d202dfdb3c0539"
@@ -214,8 +214,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 300,
-        "y": 180,
+        "x": 320,
+        "y": 100,
         "wires": [
             [
                 "ee6aa7138591a8a6",
@@ -240,8 +240,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 510,
-        "y": 220,
+        "x": 530,
+        "y": 100,
         "wires": [
             [
                 "bb806453a1ded1a6"
@@ -259,8 +259,8 @@
         "createDir": true,
         "overwriteFile": "true",
         "encoding": "utf8",
-        "x": 720,
-        "y": 220,
+        "x": 740,
+        "y": 100,
         "wires": [
             []
         ]
@@ -292,8 +292,8 @@
         "checkall": "true",
         "repair": false,
         "outputs": 3,
-        "x": 490,
-        "y": 280,
+        "x": 510,
+        "y": 160,
         "wires": [
             [
                 "315fef350c453f99"
@@ -319,7 +319,7 @@
         "finalize": "",
         "libs": [],
         "x": 750,
-        "y": 260,
+        "y": 160,
         "wires": [
             [
                 "cd0de83460fe4460"
@@ -339,7 +339,7 @@
         "finalize": "",
         "libs": [],
         "x": 740,
-        "y": 300,
+        "y": 220,
         "wires": [
             [
                 "cd0de83460fe4460"
@@ -358,8 +358,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1050,
-        "y": 300,
+        "x": 790,
+        "y": 280,
         "wires": [
             [
                 "cd0de83460fe4460"
@@ -378,8 +378,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1010,
-        "y": 260,
+        "x": 1030,
+        "y": 160,
         "wires": [
             [
                 "814eb773f3398107"
@@ -409,8 +409,8 @@
         "blockInputOverrides": false,
         "domain": "notify",
         "service": "mobile_app_g_iphone",
-        "x": 1300,
-        "y": 260,
+        "x": 1120,
+        "y": 220,
         "wires": [
             []
         ]
@@ -427,8 +427,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 420,
-        "y": 340,
+        "x": 430,
+        "y": 280,
         "wires": [
             [
                 "f5a4d69c346bb9b3",
@@ -519,8 +519,8 @@
         ],
         "inputOverride": "allow",
         "outputProperties": [],
-        "x": 740,
-        "y": 480,
+        "x": 760,
+        "y": 440,
         "wires": [
             []
         ]
@@ -537,8 +537,8 @@
         "attributes": [],
         "inputOverride": "allow",
         "outputProperties": [],
-        "x": 760,
-        "y": 540,
+        "x": 780,
+        "y": 500,
         "wires": [
             []
         ]
@@ -555,8 +555,8 @@
         "attributes": [],
         "inputOverride": "allow",
         "outputProperties": [],
-        "x": 740,
-        "y": 600,
+        "x": 770,
+        "y": 560,
         "wires": [
             []
         ]
@@ -573,8 +573,8 @@
         "attributes": [],
         "inputOverride": "allow",
         "outputProperties": [],
-        "x": 760,
-        "y": 660,
+        "x": 780,
+        "y": 620,
         "wires": [
             []
         ]
@@ -779,7 +779,7 @@
         "debugEnabled": false
     },
     {
-        "id": "ccb9f4c3ada4f512",
+        "id": "64846dec25cdacad",
         "type": "global-config",
         "env": [],
         "modules": {

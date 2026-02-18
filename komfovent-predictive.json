@@ -1,0 +1,248 @@
+[
+    {
+        "id": "ddce1c5bb3fe5199",
+        "type": "tab",
+        "label": "Komfovent - Module: Predictive",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "ce0de379b56a0d56",
+        "type": "inject",
+        "z": "ddce1c5bb3fe5199",
+        "name": "Scheduler: Shadow Tick (10 min)",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "600",
+        "crontab": "",
+        "once": true,
+        "onceDelay": 2,
+        "topic": "shadow_tick",
+        "payload": "",
+        "payloadType": "date",
+        "x": 200,
+        "y": 40,
+        "wires": [
+            [
+                "e2bb94e225d54694"
+            ]
+        ]
+    },
+    {
+        "id": "e2bb94e225d54694",
+        "type": "function",
+        "z": "ddce1c5bb3fe5199",
+        "name": "Predictive: Shadow Compute",
+        "func": "/**\n * Prognozės skaičiavimas (Shadow Compute).\n * Pastabos:\n * - Rizika ir anomalijos slopinamos, kai veikia gartraukis.\n * - Į logą įrašomi hood indikatoriai aiškesnei diagnostikai.\n */\n\nfunction clamp(min, max, v) { return Math.max(min, Math.min(max, v)); }\n\nconst matrix = global.get('prediction_matrix') || null;\nconst TZ = 'Europe/Vilnius';\nconst schema_ver = Number(global.get('schema_ver') || 0);\nconst flow_ver = String(global.get('system_version') || '4.3.1');\n\n// 1. Realaus laiko duomenys (pirminis šaltinis)\nconst co2 = Number(global.get('komfovent.last_co2') || 0);\nconst rate = Number(global.get('komfovent.telemetry_rate') || 0);\nconst threshold = Number(global.get('komfovent.auto_co2_on_threshold') || 750);\nconst alarm = global.get('homeassistant')?.states?.['alarm_control_panel.home']?.state || 'armed_away';\nconst occupied = (alarm === 'disarmed');\n\n// 1.1 Gartraukio būsena (COOKING GUARD)\n// Pastaba: Predictive tab'as nemato Control flow konteksto, todėl remiamės HA sensoriaus galia.\nconst hoodRaw = global.get('homeassistant')?.states?.['sensor.hood_socket_power']?.state;\nconst hoodStr = (hoodRaw === null || hoodRaw === undefined) ? '' : String(hoodRaw).trim().toLowerCase();\nconst hoodPower = (hoodStr === '' || hoodStr === 'unknown' || hoodStr === 'unavailable' || hoodStr === 'nan')\n  ? 0\n  : Number(hoodRaw);\nconst hoodActive = (Number.isFinite(hoodPower) && hoodPower >= 75);\nconst cookingNow = hoodActive;\n\n\n// 2. Laiko ir matricos kontekstas\nconst now = new Date();\nconst bucket = Math.floor((now.getHours() * 60 + now.getMinutes()) / 60); // 60 min bucket\nconst dowNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];\nconst dow = dowNames[now.getDay()];\n\nconst matrixKey = `${dow}_${bucket}_${occupied}`;\nlet hist = (matrix && matrix.data) ? matrix.data[matrixKey] : null;\n\n// 3. Z-Score skaičiavimas\nlet zCo2 = 0, zRate = 0;\nif (hist) {\n  if (hist.std_co2 > 0) zCo2 = (co2 - hist.mean_co2) / hist.std_co2;\n  if (hist.std_rate > 0) zRate = (rate - hist.mean_rate) / hist.std_rate;\n}\n\nconst zLead = Math.max(zCo2, zRate);\nlet anomalyStatus = hist ? (zLead > 2.0 ? 'above_normal' : (zLead < -2.0 ? 'below_normal' : 'normal')) : 'no_history';\n\n// 4. Rizika ir Confidence\nconst confLevel = matrix?.confidence_info?.level || 'low';\nconst confActionable = (confLevel === 'high' || confLevel === 'very_high');\n\nconst f30 = Math.round(co2 + rate * 30);\nconst f60 = Math.round(co2 + rate * 60);\n\n// Bazinė rizika pagal prognozę\nlet baseRisk = 0;\nif (f30 >= threshold) baseRisk = 6;\nelse if (f60 >= (threshold - 50)) baseRisk = 3;\nelse if (rate > 0.5) baseRisk = 1;\n\n// Statistiškai pagrįstas rizikos didinimas\nlet riskAdjust = (confActionable && anomalyStatus === 'above_normal') ? clamp(0, 3, Math.floor(zLead)) : 0;\n\n// Jei veikia gartraukis, slopiname prognozes (kad išvengtume klaidingų anomalijų gaminimo metu)\nif (cookingNow) {\n  anomalyStatus = 'cooking_active';\n  baseRisk = 0;\n  riskAdjust = 0;\n}\n\nconst riskScore = clamp(0, 10, baseRisk + riskAdjust);\n\n// 5. Išvestis 1: LOG ĮRAŠAS (Logging moduliui)\nconst rec = {\n  schema_ver,\n  flow_ver,\n  module: 'predictive',\n  kind: 'shadow_tick',\n  ts: new Date().toISOString(),\n  occupied,\n  alarm_state: alarm,\n  dow,\n  hour: now.getHours(),\n  co2,\n  rate: Number(rate.toFixed(2)),\n  hood_active: hoodActive,\n  hood_power_w: Number.isFinite(hoodPower) ? Math.round(hoodPower) : null,\n  cooking_mode: cookingNow,\n  co2_f_30: f30,\n  co2_f_60: f60,\n  matrix_key: matrixKey,\n  matrix_confidence_level: confLevel,\n  matrix_training_days: matrix?.training_days_actual || 0,\n  history_mean_co2: hist ? hist.mean_co2 : null,\n  history_mean_rate: hist ? hist.mean_rate : null,\n  z_co2: Number(zCo2.toFixed(2)),\n  z_rate: Number(zRate.toFixed(2)),\n  anomaly_status: anomalyStatus,\n  risk_adjust: riskAdjust,\n  risk_score: riskScore,\n  pred_request: {\n    action_level: riskScore >= 8 ? 3 : (riskScore >= 6 ? 2 : (riskScore >= 4 ? 1 : 0)),\n    fan_offset_pct: riskScore >= 8 ? 25 : (riskScore >= 6 ? 15 : (riskScore >= 4 ? 8 : 0)),\n    note: confLevel\n  }\n};\n\nflow.set('predictive_last', rec);\nmsg.log_type = 'predictive';\nmsg.log_record = rec;\n\n// 6. Išvestis 2: AI Gateway (Telegram pranešimas)\nlet msgAi = null;\nif (riskScore >= 6 && occupied && !cookingNow) {\n  msgAi = {\n    chatId: Number(env.get(\"MY_TELEGRAM_ID\")),\n    ai_reply: true,\n    topic: 'predictive_alert',\n    payload: `⚠️ *Aukšta CO₂ rizika: ${riskScore}/10*\\n` +\n      `Prognozė: ${co2} → ${f30} ppm (+30min).\\n` +\n      `Nuokrypis: Z-Rate ${zRate.toFixed(1)} (${anomalyStatus}).`\n  };\n}\n\n// Statuso rodymas Node-RED interfeise\nnode.status({\n  fill: cookingNow ? \"yellow\" : (riskScore >= 6 ? \"red\" : (confActionable ? \"green\" : \"blue\")),\n  shape: \"dot\",\n  text: cookingNow ? `COOKING | R:${riskScore} | ${confLevel}` : `R:${riskScore} | Zc:${zCo2.toFixed(1)} | Zr:${zRate.toFixed(1)} | ${confLevel}`\n});\n\nreturn [msg, msgAi];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 40,
+        "wires": [
+            [
+                "53beb0dbfa892dad"
+            ],
+            [
+                "b92350a17d9b1a04"
+            ]
+        ]
+    },
+    {
+        "id": "840315d40f2b49c4",
+        "type": "link out",
+        "z": "ddce1c5bb3fe5199",
+        "name": "Log Out: Predictive",
+        "mode": "link",
+        "links": [
+            "06fe04c8af0fb417"
+        ],
+        "x": 925,
+        "y": 40,
+        "wires": []
+    },
+    {
+        "id": "b92350a17d9b1a04",
+        "type": "link out",
+        "z": "ddce1c5bb3fe5199",
+        "name": "AI Out: Reply",
+        "mode": "link",
+        "links": [],
+        "x": 655,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "1ed0cbe82dd78d30",
+        "type": "link in",
+        "z": "ddce1c5bb3fe5199",
+        "name": "AI In: Predictive",
+        "links": [
+            "63ae068f91114f13"
+        ],
+        "x": 355,
+        "y": 100,
+        "wires": [
+            [
+                "d6a7f6f8825df289"
+            ]
+        ]
+    },
+    {
+        "id": "d6a7f6f8825df289",
+        "type": "function",
+        "z": "ddce1c5bb3fe5199",
+        "name": "AI Handler (Predictive)",
+        "func": "const last = flow.get('predictive_last') || {};\nconst matrix = global.get('prediction_matrix') || {};\nconst text = String(msg.user_text || '').toLowerCase();\n\nfunction fmtMatrix(m) {\n  if (!m.data) return \"Matrica dar nesugeneruota. Laukite naktinio mokymosi (03:05).\";\n  const ci = m.confidence_info || {};\n  return `📊 *Modelio būsena (v${m.model_ver})*\\n` +\n    `━━━━━━━━━━━━━━━━━━━━\\n` +\n    `📅 *Mokymosi laikas:* ${m.training_days_actual} d. (max 45)\\n` +\n    `📈 *Tikslumas:* ${ci.level?.toUpperCase()} (${ci.is_live_ready ? '✅ LIVE READY' : '⚠️ SHADOW ONLY'})\\n` +\n    `🕒 *Sugeneruota:* ${new Date(m.generated_at).toLocaleString('lt-LT')}\\n` +\n    `💡 _Sprendimai remiasi ${Object.keys(m.data).length} elgsenos bucket'ų._`;\n}\n\nfunction fmtShadow(u) {\n  if (!u.ts) return 'Predictive: dar nėra įrašų.';\n  return `🧠 *Rizika:* ${u.risk_score}/10 (Adjust: +${u.risk_adjust})\\n` +\n    `💨 *CO₂:* ${u.co2} → ${u.co2_f_30} (+30m)\\n` +\n    `🎯 *Z-Score:* CO₂: ${u.z_co2} | Rate: ${u.z_rate}\\n` +\n    `📜 *Statusas:* ${u.anomaly_status?.toUpperCase()}`;\n}\n\nlet reply;\nif (text.includes('matrix')) reply = fmtMatrix(matrix);\nelse if (text.includes('shadow') || text.includes('risk') || text.includes('rizika')) reply = fmtShadow(last);\nelse reply = \"Klausk: `/shadow` (rizika) arba `/matrix` (modelio branda).\";\n\nmsg.ai_reply = true;\nmsg.payload = { chatId: msg.chatId, text: reply, parse_mode: 'Markdown' };\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 500,
+        "y": 100,
+        "wires": [
+            [
+                "b92350a17d9b1a04"
+            ]
+        ]
+    },
+    {
+        "id": "53beb0dbfa892dad",
+        "type": "function",
+        "z": "ddce1c5bb3fe5199",
+        "name": "Cache: Save Last Shadow",
+        "func": "// Išsaugom paskutinį predictive įrašą AI užklausoms\nif (msg && msg.log_record && typeof msg.log_record === 'object') {\n  flow.set('predictive_last', msg.log_record);\n}\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 760,
+        "y": 40,
+        "wires": [
+            [
+                "840315d40f2b49c4"
+            ]
+        ]
+    },
+    {
+        "id": "926d80de45122bfa",
+        "type": "inject",
+        "z": "ddce1c5bb3fe5199",
+        "name": "Scheduler: Daily Learner (03:05)",
+        "props": [
+            {
+                "p": "payload"
+            },
+            {
+                "p": "topic",
+                "vt": "str"
+            }
+        ],
+        "repeat": "",
+        "crontab": "05 03 * * *",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "train_matrix",
+        "payloadType": "date",
+        "x": 200,
+        "y": 160,
+        "wires": [
+            [
+                "a689f67991856975"
+            ]
+        ]
+    },
+    {
+        "id": "a689f67991856975",
+        "type": "function",
+        "z": "ddce1c5bb3fe5199",
+        "name": "Build Training Command (45d)",
+        "func": "const baseDir = '/data/logs/komfovent';\nconst maxDays = msg.training_window_max_days || 45;\n\n// Naudojame find - tai saugiausias būdas, kurį supranta tavo sistema\nmsg.payload = `find ${baseDir} -name \"komfovent_telemetry_*.jsonl\" -mtime -${maxDays} -exec cat {} +`;\n\nnode.status({ fill: \"blue\", shape: \"ring\", text: `Training window: ${maxDays}d` });\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 490,
+        "y": 160,
+        "wires": [
+            [
+                "18fb65d69f943bf4"
+            ]
+        ]
+    },
+    {
+        "id": "18fb65d69f943bf4",
+        "type": "exec",
+        "z": "ddce1c5bb3fe5199",
+        "command": "",
+        "addpay": "payload",
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "winHide": false,
+        "oldrc": false,
+        "name": "Exec: Read Logs",
+        "x": 750,
+        "y": 160,
+        "wires": [
+            [
+                "4b1d0b8953a1039b"
+            ],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "4b1d0b8953a1039b",
+        "type": "function",
+        "z": "ddce1c5bb3fe5199",
+        "name": "Process Matrix Stats (60m)",
+        "func": "// Skaičiuojami statistiniai rodikliai matricos formavimui.\n\nfunction welfordInit() { return { n: 0, mean: 0, M2: 0 }; }\nfunction welfordAdd(st, x) {\n  st.n += 1;\n  const delta = x - st.mean;\n  st.mean += delta / st.n;\n  const delta2 = x - st.mean;\n  st.M2 += delta * delta2;\n}\nfunction welfordStd(st) {\n  if (st.n < 2) return 0;\n  return Math.sqrt(st.M2 / (st.n - 1)); // Imties standartinis nuokrypis\n}\n\nconst schema_ver = global.get('schema_ver');\nconst model_ver = global.get('model_ver');\n\nlet lines = String(msg.payload || '').split('\\n').filter(Boolean);\nlet matrix = {};\nlet uniqueDays = new Set();\n\nfor (const line of lines) {\n  let d;\n  try { d = JSON.parse(line); } catch (e) { continue; }\n  if (!d.ts || typeof d.occupied === 'undefined' || !d.dow) continue;\n  // Jei telemetry įraše yra hood indikatoriai, praleidžiam gaminimo epizodus (kad matrica būtų švaresnė).\n  if (d.hood_active === true || d.hood_effect === true) continue;\n\n  const dayStr = String(d.ts).split('T')[0];\n  if (dayStr) uniqueDays.add(dayStr);\n\n  const t = new Date(d.ts);\n  const bucket = Math.floor((t.getHours() * 60 + t.getMinutes()) / 60);\n  const key = `${d.dow}_${bucket}_${String(Boolean(d.occupied))}`;\n\n  if (!matrix[key]) {\n    matrix[key] = { co2: welfordInit(), rate: welfordInit(), n: 0 };\n  }\n\n  matrix[key].n += 1;\n  if (Number.isFinite(Number(d.co2))) welfordAdd(matrix[key].co2, Number(d.co2));\n  if (Number.isFinite(Number(d.rate))) welfordAdd(matrix[key].rate, Number(d.rate));\n}\n\nconst trainingDays = uniqueDays.size;\nlet conf = 'low';\nif (trainingDays >= 30) conf = 'very_high';\nelse if (trainingDays >= 16) conf = 'high';\nelse if (trainingDays >= 8) conf = 'medium';\n\nlet data = {};\nfor (const k of Object.keys(matrix)) {\n  const m = matrix[k];\n  data[k] = {\n    mean_co2: Number(m.co2.mean.toFixed(2)),\n    std_co2: Number(welfordStd(m.co2).toFixed(2)),\n    mean_rate: Number(m.rate.mean.toFixed(2)),\n    std_rate: Number(welfordStd(m.rate).toFixed(2)),\n    n: m.n\n  };\n}\n\nconst finalMatrix = {\n  schema_ver,\n  model_ver,\n  bucket_minutes: 60,\n  generated_at: new Date().toISOString(),\n  training_days_actual: trainingDays,\n  confidence_info: {\n    level: conf,\n    is_live_ready: (trainingDays >= 16)\n  },\n  data\n};\n\nglobal.set('prediction_matrix', finalMatrix);\nmsg.payload = JSON.stringify(finalMatrix);\nmsg.filename = '/data/state/komfovent/prediction_matrix.json';\n\nnode.status({ fill: 'blue', shape: 'dot', text: `Model: ${model_ver || 'n/a'} | Days: ${trainingDays}` });\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1000,
+        "y": 140,
+        "wires": [
+            [
+                "58d5a8d32c1ec66d"
+            ]
+        ]
+    },
+    {
+        "id": "58d5a8d32c1ec66d",
+        "type": "file",
+        "z": "ddce1c5bb3fe5199",
+        "name": "Save Matrix",
+        "filename": "filename",
+        "filenameType": "msg",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "true",
+        "encoding": "utf8",
+        "x": 950,
+        "y": 200,
+        "wires": [
+            []
+        ]
+    }
+]

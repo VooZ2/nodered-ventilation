@@ -22,8 +22,8 @@
         "once": true,
         "onceDelay": "3",
         "topic": "init_globals",
-        "x": 140,
-        "y": 100,
+        "x": 160,
+        "y": 40,
         "wires": [
             [
                 "b1cc7c894e3dd917"
@@ -35,15 +35,15 @@
         "type": "function",
         "z": "77e3fb74e4a2e935",
         "name": "Set Globals",
-        "func": "// Atnaujinti globalūs nustatymai\nglobal.set('schema_ver', 7);\nglobal.set('system_version', '4.3.1');\nglobal.set('model_ver', '1.2.1');\n\n// Atnaujintas entitetų sąrašas\nglobal.set('komfovent_entities', {\n  alarm: 'alarm_control_panel.home',\n  windows: 'binary_sensor.langai',\n  co2: 'sensor.oro_stotele_carbon_dioxide',\n  outdoor: 'sensor.boiler_outside_temperature',\n  humidity: 'sensor.bathroom_humidity',\n  stopflags: 'sensor.alarm_status_stop_flags',\n  recup: 'switch.start_stop',\n  mode: 'sensor.komfovent_logic_2',\n  fan_actual: 'sensor.intake_fan_level_current',\n  boost_ha: 'binary_sensor.komfovent_rate_boost_nr',\n  filter_remaining: 'sensor.komfovent_filter_remaining',\n  intake_temp: 'sensor.intake_air_temperature', // ID pagal Screenshot\n  ovr_ha: 'switch.recup_switch_relay' // OVR relė\n});\n\nnode.status({ fill: 'green', text: 'Entitetai paruošti' });\nreturn null;",
+        "func": "// Atnaujinti globalūs nustatymai\nglobal.set('schema_ver', 7);\nglobal.set('system_version', '4.4.0');\nglobal.set('model_ver', '1.2.1');\n\n// Atnaujintas entitetų sąrašas\nglobal.set('komfovent_entities', {\n  alarm: 'alarm_control_panel.home',\n  windows: 'binary_sensor.langai',\n  co2: 'sensor.oro_stotele_carbon_dioxide',\n  outdoor: 'sensor.boiler_outside_temperature',\n  humidity: 'sensor.bathroom_humidity',\n  stopflags: 'sensor.alarm_status_stop_flags',\n  recup: 'switch.start_stop',\n  mode: 'sensor.komfovent_logic_2',\n  fan_actual: 'sensor.intake_fan_level_current',\n  boost_ha: 'binary_sensor.komfovent_rate_boost_nr',\n  filter_remaining: 'sensor.komfovent_filter_remaining',\n  intake_temp: 'sensor.intake_air_temperature', // ID pagal Screenshot\n  ovr_ha: 'switch.recup_switch_relay' // OVR relė\n});\n\nnode.status({ fill: 'green', text: 'Entitetai paruošti' });\nreturn null;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 390,
-        "y": 100,
+        "x": 350,
+        "y": 40,
         "wires": [
             []
         ]
@@ -68,8 +68,8 @@
         "onceDelay": 2,
         "topic": "telemetry_tick",
         "payloadType": "date",
-        "x": 200,
-        "y": 160,
+        "x": 220,
+        "y": 100,
         "wires": [
             [
                 "1406ea0114efa261"
@@ -88,8 +88,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 470,
-        "y": 160,
+        "x": 490,
+        "y": 100,
         "wires": [
             [
                 "5c8a2f50c7d9e721"
@@ -108,8 +108,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 720,
-        "y": 140,
+        "x": 740,
+        "y": 80,
         "wires": [
             [
                 "bcc09d8b6598eb3d"
@@ -122,8 +122,8 @@
         "z": "77e3fb74e4a2e935",
         "name": "Log In: Control",
         "links": [],
-        "x": 235,
-        "y": 220,
+        "x": 315,
+        "y": 140,
         "wires": [
             [
                 "bcc09d8b6598eb3d"
@@ -136,8 +136,8 @@
         "z": "77e3fb74e4a2e935",
         "name": "Log In: Learning",
         "links": [],
-        "x": 235,
-        "y": 260,
+        "x": 315,
+        "y": 180,
         "wires": [
             [
                 "bcc09d8b6598eb3d"
@@ -152,8 +152,8 @@
         "links": [
             "b9c13e70a0382586"
         ],
-        "x": 235,
-        "y": 300,
+        "x": 315,
+        "y": 220,
         "wires": [
             [
                 "bcc09d8b6598eb3d"
@@ -172,8 +172,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 410,
-        "y": 260,
+        "x": 490,
+        "y": 180,
         "wires": [
             [
                 "af8095d5be1b7178"
@@ -192,8 +192,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 680,
-        "y": 260,
+        "x": 760,
+        "y": 180,
         "wires": [
             [
                 "b124a7572a40f803"
@@ -211,8 +211,8 @@
         "createDir": true,
         "overwriteFile": "false",
         "encoding": "none",
-        "x": 960,
-        "y": 260,
+        "x": 1040,
+        "y": 180,
         "wires": [
             []
         ]
@@ -233,8 +233,8 @@
         "once": true,
         "onceDelay": 10,
         "topic": "cleanup",
-        "x": 190,
-        "y": 400,
+        "x": 210,
+        "y": 320,
         "wires": [
             [
                 "909468e82665e352"
@@ -252,8 +252,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 470,
-        "y": 400,
+        "x": 490,
+        "y": 320,
         "wires": [
             [
                 "e0c479bfc56b11cd"
@@ -272,8 +272,8 @@
         "winHide": false,
         "oldrc": false,
         "name": "Exec: Cleanup Old Logs",
-        "x": 730,
-        "y": 400,
+        "x": 750,
+        "y": 320,
         "wires": [
             [
                 "f620056822e6967d"
@@ -297,8 +297,8 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 990,
-        "y": 400,
+        "x": 1010,
+        "y": 320,
         "wires": [
             []
         ]
@@ -311,8 +311,8 @@
         "links": [
             "5cfb2ecb141c43b2"
         ],
-        "x": 235,
-        "y": 340,
+        "x": 315,
+        "y": 260,
         "wires": [
             [
                 "bcc09d8b6598eb3d"

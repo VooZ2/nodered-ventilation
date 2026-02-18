@@ -11,6 +11,105 @@ MAJOR.MINOR.PATCH
 - PATCH – klaidų taisymai ir smulkūs patobulinimai  
 
 ---
+
+## [4.4.0] - 2026-02-18
+
+### Gartraukio (HOOD) režimo integracija, atskiras IN/OUT valdymas ir stabilizuotas post-run mechanizmas
+
+---
+
+## Pridėta
+
+### Pilna gartraukio (HOOD) režimo integracija į Control modulį
+
+- Gartraukio lygio nustatymas pagal rozetės galią (`sensor.hood_socket_power`).
+- 3 lygiai su atskirais IN/OUT procentais:
+  - **L1:** IN 80% / OUT 45%
+  - **L2:** IN 90% / OUT 50%
+  - **L3:** IN 100% / OUT 55%
+- Automatinis post-run režimas (5/8/12 min. pagal sesijos max lygį).
+- Post-run fazėje subalansuotas vėdinimas: **IN 65% / OUT 65%**.
+- HOOD būsenų sekimas:
+  - `hood_state`: `idle | active | post_run`
+  - `hood_level`: 1–3
+  - `hood_level_max_session`
+  - `hood_postrun_until`
+
+### Atskiras tiekiamo ir ištraukiamo oro valdymas
+
+- Įdiegti `fan_in` ir `fan_out` laukai vietoje vieno bendro `fan`.
+- `Build Actions` atnaujintas:
+  - Jei yra atskiri HA entitetai → siunčia atskiras IN ir OUT komandas.
+  - Jei nėra → fallback į bendrą fan entitetą.
+
+### RBE raktas išplėstas
+
+- `desired_key` dabar apima:
+  - `fan_in`
+  - `fan_out`
+  - `hood_state`
+  - `hood_level`
+- Užtikrina, kad post-run perėjimas realiai suveiktų ir nebūtų blokuojamas RBE.
+
+---
+
+## Pakeista
+
+### HOOD prioritetų logika
+
+- Gartraukis ignoruojamas, jei `windows_long_open = true`.
+- HOOD blokuoja Rate Boost aktyvaciją.
+- HOOD turi aukštesnį prioritetą nei Day/Night režimas.
+
+### Post-run OFF debounce stabilizacija
+
+- Ištaisyta logikos spraga, dėl kurios post-run kartais neprasidėdavo dėl galios šokinėjimo.
+- OFF kandidatas neberesetinamas triukšmo zonoje (60–75W).
+
+### Build Actions struktūra
+
+- Vietoje netiesioginių laukų dabar formuojamas `msg.payload` masyvas:
+  - `switch_on`
+  - `switch_off`
+  - `set_number`
+- Suderinta su `Split Actions` ir `Route Action by Kind` mazgais.
+
+### Control Log schema praplėsta
+
+- Pridėti:
+  - `fan_in_desired`
+  - `fan_out_desired`
+- `fan_desired` dabar skaičiuojamas kaip `max(fan_in, fan_out)` suderinamumui.
+
+---
+
+## Sutvarkyta
+
+### RBE blokavimo klaida
+
+- Ankstesnė logika stebėjo tik `fan`, todėl IN/OUT pokyčiai nebuvo laikomi pasikeitimu.
+- Dėl to post-run režime fan procentai realiai neatsinaujindavo.
+
+### Armed Boost suderinamumas
+
+- `Force OFF After Armed Boost` atnaujintas naudoti `fan_in` ir `fan_out`.
+
+### Post-run nepersijungimo problema
+
+- Ištaisyta situacija, kai galios reikšmės trumpam pakildavo virš OFF ribos ir neleisdavo stabiliai pereiti į post-run.
+
+---
+
+## Architektūrinė pastaba
+
+Nuo šios versijos:
+
+- Sistema nebėra vieno fan procento logika.
+- Control modulis tapo dvikanalis (Supply/Extract).
+- HOOD režimas veikia kaip slėgio kompensavimo mechanizmas, o ne papildomas ištraukimas.
+
+---
+
 ## [4.3.1] - 2026-02-16
 
 ### Tiekiamo oro temperatūros, OVR integracija ir DI komunikacijos standartas
@@ -26,7 +125,7 @@ MAJOR.MINOR.PATCH
 - **Būsenų logika:** OVR ir Boost būsenos suvienodintos į dvi fazes: **Aktyvus** arba **Išjungtas**.
 - **Statuso suvestinė:** Telegram komanda `/status` papildyta temperatūra, OVR bei Boost būsenomis, naudojant pilną lietuvišką terminologiją.
 
-**KSutvarkyta:**
+**Sutvarkyta:**
 - **Sensorių ID sinchronizacija:** Pataisytas temperatūros jutiklio ID į `sensor.intake_air_temperature` pagal HA duomenis.
 - **Srauto klaida:** Pataisytas „Intake air temperature“ mazgo klaidingas `msg.topic` nustatymas (pakeistas iš `humidity` į `intake_temp`).
 - **DI matomumas:** Ištaisyta kritinė klaida, dėl kurios Gemini nematė temperatūros reikšmės, nors ji buvo HA sistemoje.
