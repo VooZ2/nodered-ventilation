@@ -102,6 +102,8 @@ Integruotas **Gemini** veikia kaip vėdinimo ekspertas:
 - DI analizuoja logus ir ieško anomalijų
 - Atsakymai pateikiami aiškia, žmogiška lietuvių kalba
 
+<img width="1256" height="871" alt="Screenshot 2026-02-18 at 20 52 42" src="https://github.com/user-attachments/assets/11930ba9-006c-4084-bae4-642ccb76077f" />
+
 ---
 
 ## 📊 Telemetrija ir Vizualizacija
