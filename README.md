@@ -1,6 +1,6 @@
 # 🌬️ Komfovent Smart Automation
 
-Profesionalus rekuperatoriaus valdymo ir adaptyvaus CO₂ mokymosi sprendimas, sukurtas **Node-RED** aplinkai ir integruotas su **Home Assistant**.  
+Profesionalus rekuperatoriaus valdymo ir adaptyvaus CO₂ mokymosi sprendimas, sukurtas **Node-RED** aplinkai ir integruotas su **Home Assistant**.
 
 Sistema dinamiškai reguliuoja vėdinimą realiu laiku, prisitaiko prie gyventojų ritmo ir yra audituojama **Gemini** dirbtinio intelekto, siekiant maksimalaus komforto bei energijos efektyvumo.
 
@@ -10,7 +10,7 @@ Sistema dinamiškai reguliuoja vėdinimą realiu laiku, prisitaiko prie gyventoj
 
 ## ⚠ Projekto Paskirtis (Disclaimer)
 
-Projektas sukurtas asmeniniams poreikiams. GitHub repozitorija skirta versijų sekimui.  
+Projektas sukurtas asmeniniams poreikiams. GitHub repozitorija skirta versijų sekimui.
 
 Sistema nėra universali – ją naudojate savo rizika ir be oficialaus palaikymo.
 
@@ -25,33 +25,33 @@ Sprendimai priimami griežta prioritetų tvarka (nuo aukščiausio):
 1. **STOP FLAGS** – Aptikus klaidą ar techninį režimą, sistema stabdoma.
 2. **Vonios OVR** – Drėgmei >80% aktyvuojamas 100% režimas. Išsijungia tik jei <70% išsilaiko 5 min.
 3. **Armed Away** – Jei signalizacija „Armed Away“ ir CO₂ ≥ 800 ppm, atliekamas vienkartinis išvėdinimas, po to sistema išjungiama.
-4. **Gartraukis (HOOD)** – Automatinė slėgio kompensacija pagal gartraukio galią.
+4. **Gartraukis** – Automatinė slėgio kompensacija pagal gartraukio galią.
 5. **Langų apsauga** – Jei langai atidaryti >10 min., vėdinimas stabdomas.
-6. **Day / Night režimas** – Naktį palaikomas bazinis 35%, dieną reguliuojama pagal CO₂.
+6. **Day / Night režimas** – Naktį palaikomas bazinis lygis, dieną reguliuojama pagal CO₂.
 
 ---
 
 ## 🍳 Gartraukio Režimas
 
-Sistema automatiškai kompensuoja gartraukio ištraukiamą orą didindama tiekimą (IN) ir ribodama ištraukimą (OUT).
+Sistema automatiškai kompensuoja gartraukio ištraukiamą orą didindama tiekimą (IN) ir ribodama ištraukimą (OUT), sukurdama **teigiamą slėgį**. Tai neleidžia dūmams grįžti į kambarį ir neleidžia siurbti šalto oro per plyšius.
 
 ### Lygiai pagal galią
 
 | Gartraukio galia | Tiekimas | Ištraukimas |
 |------------------|--------------|-------------------|
-| ≥ 75W (L1)      | 80%          | 45%               |
-| ≥ 105W (L2)     | 90%          | 50%               |
-| ≥ 145W (L3)     | 100%         | 55%               |
+| ≥ 85W (L1)       | 80%          | 45%               |
+| ≥ 105W (L2)      | 90%          | 50%               |
+| ≥ 145W (L3)      | 100%         | 55%               |
 
 Tikslas – sumažinti neigiamą slėgį namuose ir išvengti oro siurbimo per plyšius.
 
 ### Post-run (po išjungimo)
 
-- Trukmė: 5 / 8 / 12 min. (pagal sesijos max lygį)
+- Trukmė: 5 / 8 / 12 min. (pagal gartraukio veikimo intensyvumą)
 - Režimas: **IN 65% / OUT 65%**
 - Tikslas: ramus, subalansuotas kvapų pašalinimas
 
-> Jei langai ilgai atidaryti – HOOD režimas ignoruojamas.
+> Jei langai ilgai atidaryti – gartraukio kompensavimo režimas ignoruojamas.
 
 ---
 
@@ -59,13 +59,13 @@ Tikslas – sumažinti neigiamą slėgį namuose ir išvengti oro siurbimo per p
 
 | CO₂ lygis (ppm) | Ventiliatoriaus greitis (%) |
 |-----------------|----------------------------|
-| < 650          | 20%                        |
-| 650–709        | 45%                        |
-| 710–849        | 55%                        |
-| 850–1099       | 70%                        |
-| ≥ 1100         | 100%                       |
+| < 650           | 20%                        |
+| 650–709         | 45%                        |
+| 710–849         | 55%                        |
+| 850–1099        | 70%                        |
+| ≥ 1100          | 100%                       |
 
-Sistema reguliuoja **IN ir OUT vienodai** (subalansuotas režimas), išskyrus HOOD atvejį.
+Sistema reguliuoja **IN ir OUT vienodai** (subalansuotas režimas), išskyrus gartraukio veikimo metu.
 
 ---
 
@@ -89,18 +89,23 @@ Boost režime IN ir OUT pakeliami bent iki 55%.
 Sistema kasdien perskaičiuoja optimalų įsijungimo slenkstį pagal paskutinių 14 dienų istoriją.
 
 - Atskiriami darbo dienų ir savaitgalių modeliai
-- HOOD epizodai neįtraukiami į mokymosi statistiką
+- Gartraukio veikimo epizodai neįtraukiami į mokymosi statistiką
 - Predictive modelis vertina rizikos lygį ir pasitikėjimą
 
 ---
 
 ## 🤖 Gemini Analizė ir Auditas
 
-Integruotas **Gemini** veikia kaip vėdinimo ekspertas:
+Integruotas **Gemini** veikia kaip išmanusis vėdinimo inžinierius. Sąveika vyksta dviem būdais:
 
-- Telegram komanda `/status` rodo CO₂, režimą, IN/OUT %, OVR ir HOOD būseną
-- DI analizuoja logus ir ieško anomalijų
-- Atsakymai pateikiami aiškia, žmogiška lietuvių kalba
+1.  **Techninės komandos:**
+    * `/status` – parodo momentinę CO₂, režimo, gartraukio ir ventiliatorių būseną.
+    * `/co2`, `/fan` – greita konkrečių parametrų peržiūra.
+
+2.  **DI užklausos (laisva forma):**
+    * Galima klausti bet ko, pvz.: *„Kada šiandien veikė gartraukis?“* arba *„Kodėl dabar padidintas vėdinimas?“*.
+    * Sistema naudoja **"Smart Gating"** technologiją: istoriniai logai ir taisyklės siunčiami DI modeliui tik tada, kai klausimas to reikalauja.
+    * Atsakymai generuojami dinamiškai, be "n/a" reikšmių, atsižvelgiant į jutiklių būklę.
 
 <img width="1256" height="871" alt="Screenshot 2026-02-18 at 20 52 42" src="https://github.com/user-attachments/assets/11930ba9-006c-4084-bae4-642ccb76077f" />
 
@@ -110,10 +115,9 @@ Integruotas **Gemini** veikia kaip vėdinimo ekspertas:
 
 Sistema užtikrina aiškų ir skaidrų duomenų stebėjimą realiuoju laiku. Visi sprendimai fiksuojami struktūrizuotuose loguose ir gali būti analizuojami per Home Assistant ar DI asistentą.
 
-- **Realaus laiko rodikliai:** CO₂ (ppm), ventiliatorių IN / OUT greitis (%), lauko ir tiekiamo oro temperatūra, drėgmė bei HOOD būsena (`idle / active / post_run`).
+- **Realaus laiko rodikliai:** CO₂ (ppm), ventiliatorių IN / OUT greitis (%), lauko ir tiekiamo oro temperatūra, drėgmė bei gartraukio būsena.
 - **Režimų stebėjimas:** Diena / Naktis, Vonios OVR, Armed Away, Rate Boost ir Gartraukio lygis su aktyvia kompensacija.
-- **Istoriniai duomenys:** JSONL logai saugo CO₂ dinamiką, kilimo greitį (ppm/min), IN/OUT pokyčius ir HOOD epizodus.
-- **Efektyvumo įžvalgos:** Galima įvertinti, kada ir kodėl aktyvuojamas Boost, kiek trunka HOOD post-run fazė bei kaip keičiasi namų mikroklimatas paros eigoje.
+- **Efektyvumo įžvalgos:** Galima įvertinti, kada ir kodėl aktyvuojamas Boost, kiek trunka gartraukio "post-run" fazė bei kaip keičiasi namų mikroklimatas paros eigoje.
 - **AI analizė:** Gemini naudoja kontekstinį sistemos „snapshot“, kad paaiškintų sprendimus ir aptiktų galimas anomalijas.
 
 Visa telemetrija generuojama Node-RED viduje; Home Assistant naudojamas tik sensorių ir valdymo integracijai.
@@ -132,12 +136,6 @@ Visa telemetrija generuojama Node-RED viduje; Home Assistant naudojamas tik sens
 
 ## 🗂️ Duomenų Kaupimas
 
-- JSONL logai su CO₂, IN/OUT %, HOOD, OVR ir temperatūra
-- 2 mėn. saugojimo politika
-- Pilnas kontekstinis snapshot DI analizei
-
----
-
-## 🔢 Versija
-
-**v4.4.2** 
+- JSONL logai sistemos duomenimis.
+- Visi duomenys turi **versijavimą**, kad keičiantis logikai (pvz., atsiradus naujiems sensoriams), mokymosi algoritmai ir DI galėtų teisingai interpretuoti istorinius laikotarpius.
+- Saugojimo politika pritaikyta ilgalaikei analizei ir DI modelio mokymui.
