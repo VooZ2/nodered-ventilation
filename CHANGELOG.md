@@ -12,6 +12,62 @@ MAJOR.MINOR.PATCH
 
 ---
 
+# [v4.4.2] – 2026-02-18
+
+Pilnas DI stabilizavimo atnaujinimas: duomenų sinchronizacija, „nėra duomenų“ klaidos pašalinimas ir toninio stiliaus suvienodinimas
+
+Šioje versijoje Komfovent DI sluoksnis buvo iš esmės peržiūrėtas ir stabilizuotas. Pagrindinis tikslas – pašalinti situacijas, kai asistentas atsakydavo „neturiu duomenų“, nors realūs sistemos parametrai buvo prieinami. Taip pat suvienodintas atsakymų tonas ir užtikrinta teisinga prioritetų interpretacija hipotetiniuose scenarijuose.
+
+---
+
+## Patobulinta
+
+### DI duomenų kontekstas (AI Context)
+
+- Atkurta ir sustiprinta Home Assistant būsenų paieškos logika (fallback į kelias `states` struktūras).
+- Sinchronizuotas `last_desired` objektas su DI kontekstu – užtikrintas teisingas `fan_in`, `fan_out` ir `pressure_state` perdavimas.
+- Įtrauktos aktyvios Boost, Hold ir Cooldown būsenos su realiu laiko skaičiavimu.
+- Stabilizuota slėgio logika (positive / negative / balanced) pagal realius ventiliatorių santykius.
+
+### Prompt Builder optimizacija
+
+- Įdiegtas dinaminis „gating“ – logai siunčiami tik jei klausiama apie praeitį, taisyklės tik jei klausiama apie scenarijus.
+- Pašalintos „n/a“ reikšmės – jei duomenų nėra, sakinys tiesiog neformuojamas.
+- Supaprastintas faktų blokas – formuojamas tik iš realiai turimų parametrų.
+- Įtvirtinta griežta toninė kontrolė: be pasisveikinimų, be empatijos, be techninių kintamųjų pavadinimų.
+
+---
+
+## Loginiai pataisymai
+
+- Ištaisyta prioritetų interpretacija hipotetiniuose atsakymuose.
+- Aiškiai apibrėžta, kad aukštesnis prioritetas visada blokuoja žemesnį.
+- Užtikrinta, kad Gartraukis ir Langai turi aukštesnį prioritetą nei Rate Boost.
+- Stabilizuota Boost scenarijų analizė (≥12 ppm/min + CO₂ slenkstis).
+
+---
+
+## Ištaisyta
+
+- Pašalinta kritinė klaida, kai DI teigdavo „neturiu informacijos apie CO₂“, nors sensorius veikė.
+- Ištaisyta klaida, kai ppm/min rodiklis buvo ignoruojamas, jei Boost neaktyvus.
+- Pašalintas neteisingas teiginys, kad Rate Boost turi aukštesnį prioritetą nei Gartraukis.
+- Sumažintas tokenų naudojimas (~30–50% mažesnis prompt dydis įprastais klausimais).
+
+---
+
+## Rezultatas
+
+DI dabar:
+
+- Atsako faktais, ne spekuliacijomis.
+- Naudoja realius sensorių duomenis.
+- Teisingai interpretuoja sistemos prioritetus.
+- Kalba trumpai, profesionaliai ir draugiškai („Tu“ forma).
+- Stabiliai veikia be „nėra duomenų“ atsakymų.
+
+---
+
 ## v4.4.1 — Bugfix (AI context + fan desired + hood/state consistency)
 
 ### Pataisyta
