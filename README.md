@@ -31,13 +31,13 @@ Sprendimai priimami griežta prioritetų tvarka (nuo aukščiausio):
 
 ---
 
-## 🍳 Gartraukio (HOOD) Režimas
+## 🍳 Gartraukio Režimas
 
 Sistema automatiškai kompensuoja gartraukio ištraukiamą orą didindama tiekimą (IN) ir ribodama ištraukimą (OUT).
 
 ### Lygiai pagal galią
 
-| Gartraukio galia | IN (Tiekimas) | OUT (Ištraukimas) |
+| Gartraukio galia | Tiekimas | Ištraukimas |
 |------------------|--------------|-------------------|
 | ≥ 75W (L1)      | 80%          | 45%               |
 | ≥ 105W (L2)     | 90%          | 50%               |
@@ -69,7 +69,7 @@ Sistema reguliuoja **IN ir OUT vienodai** (subalansuotas režimas), išskyrus HO
 
 ---
 
-## 📈 Aktyvus Vėdinimas (Rate Boost)
+## 📈 Aktyvus Vėdinimas (Boost)
 
 Sistema reaguoja į CO₂ kilimo greitį (ppm/min), ne tik į absoliučią reikšmę.
 
@@ -106,7 +106,7 @@ Integruotas **Gemini** veikia kaip vėdinimo ekspertas:
 
 ---
 
-## 📊 Telemetrija ir Vizualizacija
+## 📊 Telemetrija ir Home Assitant
 
 Sistema užtikrina aiškų ir skaidrų duomenų stebėjimą realiuoju laiku. Visi sprendimai fiksuojami struktūrizuotuose loguose ir gali būti analizuojami per Home Assistant ar DI asistentą.
 
@@ -122,7 +122,7 @@ Visa telemetrija generuojama Node-RED viduje; Home Assistant naudojamas tik sens
 
 ---
 
-## 🧹 Filtrų Stebėjimas
+## 🧹 Filtrai
 
 - Skaičiuojamos realios ventiliatoriaus darbo valandos
 - Rodomas filtrų nusidėvėjimo procentas
@@ -140,4 +140,4 @@ Visa telemetrija generuojama Node-RED viduje; Home Assistant naudojamas tik sens
 
 ## 🔢 Versija
 
-**v4.4.0** 
+**v4.4.2** 
