@@ -1,88 +1,303 @@
-# 🛠️ Diegimo ir Konfigūravimo Gairės  
-## (Installation & Configuration Guidelines)
+# 🛠 Installation & Configuration Guide
 
-Šis projektas yra asmeninis „pasidaryk pats“ (DIY) tipo vėdinimo optimizavimo sprendimas, sukurtas specifinei namų ekosistemai. Sistema nėra universali, todėl jos naudojimas kitoje aplinkoje reikalauja individualaus pritaikymo ir techninio supratimo.
+This project is a **DIY home ventilation optimization system** built
+around **Home Assistant**, **Node‑RED**, and **Komfovent ventilation
+units**.
 
----
+The system was developed for a specific home automation environment and
+**is not a plug‑and‑play solution**. Running it in another environment
+requires **adaptation, technical understanding, and configuration
+changes**.
 
-# ⚠ Atsakomybė ir Pritaikymas  
-## (Responsibility and Adaptation)
+------------------------------------------------------------------------
 
-### 🔹 Asmeninė atsakomybė  
-Sistemos pritaikymas tavo namams, jutiklių pavadinimų (Entity ID) keitimas ir logikos derinimas yra tik tavo atsakomybė.
+# ⚠ Responsibility and Adaptation
 
-### 🔹 DI pagalba  
-Kadangi projektas sukurtas bendradarbiaujant su **Gemini** ir **ChatGPT**, primygtinai rekomenduojama naudoti šiuos įrankius kodo analizei bei pritaikymui tavo poreikiams.  
-Dirbtinis intelektas puikiai supranta šių srautų struktūrą ir gali padėti perrašyti mazgus pagal tavo naudojamus jutiklius.
+## Personal Responsibility
 
-### 🔹 Jokio palaikymo  
-Autorius neteikia jokio techninio palaikymo, konsultacijų ar klaidų taisymo paslaugų.  
-Jei sistema neveikia tavo aplinkoje – sprendimų ieškokite savarankiškai.
+Adapting this system to your own environment is entirely **your
+responsibility**.
 
----
+You will likely need to modify:
 
-# 📂 Sistemos Failai  
-## (System Files)
+-   Home Assistant **Entity IDs**
+-   Node‑RED **flow configuration**
+-   sensor mappings
+-   automation logic
 
-Norint, kad sistema veiktų korektiškai (**v4.3.0**), rekomenduojama importuoti visus modulius nurodyta tvarka:
+Every home installation is different, therefore some customization will
+always be required.
 
-- **komfovent-control.json**  
-  Pagrindinis valdymo variklis, priimantis vėdinimo sprendimus.
+------------------------------------------------------------------------
 
-- **komfovent-learning.json**  
-  Adaptyvus CO₂ slenksčio skaičiavimas ir paros analizė.
+## AI Assistance
 
-- **komfovent-logging.json**  
-  Centralizuotas duomenų kaupimas (v5 schema) ir telemetrija.
+This project was developed with assistance from **Gemini** and
+**ChatGPT**.
 
-- **komfovent-filters.json**  
-  Filtrų efektyvaus darbo stebėjimas ir nusidėvėjimo modelis.
+When adapting the system to your own setup, AI tools can help with:
 
-- **komfovent-ai_gateway.json**  
-  Sąsaja su Telegram botu ir Gemini API „šešėlinei analizei“.
+-   analyzing Node‑RED flows
+-   adapting sensor names
+-   rewriting logic blocks
+-   troubleshooting configuration issues
 
----
+------------------------------------------------------------------------
 
-# ⚙️ Minimalūs Reikalavimai  
-## (Minimum Requirements)
+## Support Disclaimer
 
-Prieš paleidžiant srautus, Home Assistant aplinkoje privalo egzistuoti šie elementai:
+This repository is shared **for educational and experimental purposes**.
 
----
+The author does **not provide individual support or consulting**.\
+If the system does not work in your environment, you are expected to
+investigate and adapt it yourself.
 
-## 1️⃣ Pagalbiniai elementai (Helpers)
+------------------------------------------------------------------------
 
-- **input_number.co2_on_threshold**  
-  Skaitinis helperis, kurį sistema automatiškai atnaujina kas parą (03:00 LT).
+# 📂 System Modules
 
----
+For the system to work correctly (**v5 architecture**), import the
+modules in the following order:
 
-## 2️⃣ Katalogų struktūra (File System)
+### 1. `komfovent-control.json`
 
-Node-RED konteineryje privalo būti sukurti šie katalogai (arba atitinkamai sumontuoti „volumes“):
+Main ventilation control engine responsible for:
 
-- `/data/logs/komfovent/`  
-  Skirtas JSONL duomenų kaupimui.
+-   system priority logic
+-   fan speed control
+-   boost logic
+-   hood integration
+-   safety guards
 
-- `/data/state/komfovent/`  
-  Skirtas filtrų būsenos ir kitų kintamųjų išsaugojimui po sistemos persikrovimo.
+### 2. `komfovent-learning.json`
 
----
+Adaptive CO₂ learning module responsible for:
 
-## 3️⃣ Centralizuota konfigūracija (Global Settings)
+-   automatic CO₂ threshold adjustment
+-   occupancy‑aware learning
+-   day/week pattern detection
 
-Visi HA jutiklių pavadinimai (Entity ID) privalo būti sukonfigūruoti vienoje vietoje – mazge:
+### 3. `komfovent-logging.json`
 
-**„Init: Global Settings“**  
-(skiltyje *Komfovent - Module: Logging*)
+Centralized logging and telemetry:
 
-Pakeitus nustatymus, būtina paspausti **Inject** mygtuką, kad reikšmės būtų įrašytos į globalią atmintį.
+-   telemetry storage
+-   control event logging
+-   historical data collection
+-   predictive model data source
 
----
+### 4. `komfovent-filters.json`
 
-# 🤖 DI Indėlis  
-## (AI Disclaimer)
+Filter lifetime monitoring:
 
-Šis projektas (architektūra, programinis kodas ir ši dokumentacija) sukurtas glaudžiai bendradarbiaujant su dirbtinio intelekto modeliais (**Gemini** ir **ChatGPT**).  
+-   effective filter runtime
+-   filter wear estimation
+-   maintenance reminders
 
-Tai užtikrina nuoseklų duomenų struktūrizavimą, tačiau reikalauja žmogaus priežiūros diegimo metu.
+### 5. `komfovent-ai_gateway.json`
+
+AI integration layer providing:
+
+-   Telegram interface
+-   AI‑assisted system interpretation
+-   audit snapshots
+-   predictive diagnostics
+
+------------------------------------------------------------------------
+
+# ⚙ Minimum Requirements
+
+Before importing the flows, ensure that the following components exist
+in your **Home Assistant** environment.
+
+------------------------------------------------------------------------
+
+## 1️⃣ Helper Entities
+
+### `input_number.co2_on_threshold`
+
+Numeric helper used by the adaptive learning module.
+
+The system automatically updates this value **daily at 03:00 (local
+time)**.
+
+------------------------------------------------------------------------
+
+## 2️⃣ Required Directories
+
+Inside the **Node‑RED container**, the following directories must exist
+(or be mounted as volumes):
+
+    /data/logs/komfovent/
+    /data/state/komfovent/
+
+### `/data/logs/komfovent/`
+
+Used for long‑term telemetry logging.\
+Data is stored in **JSONL format**.
+
+### `/data/state/komfovent/`
+
+Used for persistent state storage including:
+
+-   filter state
+-   learning variables
+-   runtime data
+
+This ensures the system can recover state after restarts.
+
+------------------------------------------------------------------------
+
+## 3️⃣ Centralized Configuration
+
+All **Home Assistant Entity IDs** must be configured in one place.
+
+Node‑RED node:
+
+`Init: Global Settings`
+
+Location:
+
+`Komfovent - Module: Logging`
+
+After modifying configuration values, press the **Inject** button to
+load them into global context.
+
+------------------------------------------------------------------------
+
+# 🌡 Required Sensors
+
+The following sensors are required for the system to operate correctly.
+
+### Indoor CO₂ Sensor
+
+Example:
+
+`sensor.indoor_co2`
+
+Used for:
+
+-   ventilation activation
+-   predictive analysis
+-   learning model input
+
+------------------------------------------------------------------------
+
+### Indoor Humidity Sensor
+
+Example:
+
+`sensor.indoor_humidity`
+
+Used for:
+
+-   humidity‑based ventilation boost
+-   bathroom moisture control
+
+------------------------------------------------------------------------
+
+### Outdoor Temperature Sensor
+
+Example:
+
+`sensor.outdoor_temperature`
+
+Used for:
+
+-   environmental context
+-   predictive model calibration
+-   ventilation strategy adjustments
+
+------------------------------------------------------------------------
+
+# 👍 Recommended Sensors
+
+These sensors are not strictly required but **greatly improve system
+behaviour**.
+
+  Sensor                   Purpose
+  ------------------------ -------------------------------------------
+  Window sensors           Detect prolonged window ventilation
+  Alarm state              Determine occupancy
+  Bathroom humidity        Trigger OVR ventilation
+  Kitchen hood power       Detect hood usage and compensate pressure
+  Intake air temperature   Diagnostics and airflow analysis
+
+------------------------------------------------------------------------
+
+## Window Sensors
+
+Examples:
+
+-   `binary_sensor.window_living_room`
+-   `binary_sensor.window_bedroom`
+
+Used by the **Windows Guard** logic.\
+If windows remain open longer than the configured threshold, ventilation
+may be reduced or disabled.
+
+------------------------------------------------------------------------
+
+## Alarm / Occupancy State
+
+Recommended entity:
+
+`alarm_control_panel.home`
+
+When the alarm is **armed**, the system assumes the home is unoccupied.\
+Learning algorithms will ignore CO₂ data during that period.
+
+------------------------------------------------------------------------
+
+## Bathroom Humidity Sensor
+
+Example:
+
+`sensor.bathroom_humidity`
+
+Used to activate **OVR ventilation boost** during shower or high
+moisture events.
+
+------------------------------------------------------------------------
+
+## Kitchen Hood Power Sensor
+
+Example:
+
+`sensor.hood_socket_power`
+
+Used to detect kitchen hood activity and activate **pressure
+compensation mode**.
+
+------------------------------------------------------------------------
+
+# 🤖 AI Contribution
+
+This project --- including its **architecture, code structure, and
+documentation** --- was developed in collaboration with **AI models
+(Gemini and ChatGPT)**.
+
+AI assistance helped with:
+
+-   architecture design
+-   telemetry schema
+-   Node‑RED flow structure
+-   documentation generation
+
+However, **human supervision is required during deployment and
+configuration**.
+
+------------------------------------------------------------------------
+
+# ⚠ Important
+
+This project is intended for **advanced Home Assistant users** familiar
+with:
+
+-   Node‑RED
+-   Home Assistant entities
+-   container environments
+-   automation debugging
+
+Expect some manual configuration and troubleshooting when deploying the
+system.
