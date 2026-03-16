@@ -1,141 +1,226 @@
 # 🌬️ Komfovent Smart Automation
 
-Profesionalus rekuperatoriaus valdymo ir adaptyvaus CO₂ mokymosi sprendimas, sukurtas **Node-RED** aplinkai ir integruotas su **Home Assistant**.
+Professional ventilation automation and adaptive CO₂ learning system built for **Node-RED** and integrated with **Home Assistant**.
 
-Sistema dinamiškai reguliuoja vėdinimą realiu laiku, prisitaiko prie gyventojų ritmo ir yra audituojama **Gemini** dirbtinio intelekto, siekiant maksimalaus komforto bei energijos efektyvumo.
+The system dynamically adjusts ventilation in real time, adapts to occupant behavior, and can be audited by **Gemini AI** to maximize comfort and energy efficiency.
 
 <img width="1450" height="508" alt="Screenshot 2026-02-12 at 22 46 20" src="https://github.com/user-attachments/assets/40f036b9-5d66-4f8a-9ecc-0869ea52c75c" />
 
 ---
 
-## ⚠ Projekto Paskirtis (Disclaimer)
+# ⚠ Project Disclaimer
 
-Projektas sukurtas asmeniniams poreikiams. GitHub repozitorija skirta versijų sekimui.
+This project was created for **personal use**.  
+The GitHub repository exists primarily for **version tracking and documentation**.
 
-Sistema nėra universali – ją naudojate savo rizika ir be oficialaus palaikymo.
+The system is **not plug-and-play**. It may require adaptation for your own environment.
 
-**SVARBU:** Ši sistema (architektūra, programinis kodas ir dokumentacija) sukurta bendradarbiaujant su dirbtinio intelekto modeliais (**Gemini** ir **ChatGPT**).
-
----
-
-## 🧠 Realaus Laiko Valdymo Logika
-
-Sprendimai priimami griežta prioritetų tvarka (nuo aukščiausio):
-
-1. **STOP FLAGS** – Aptikus klaidą ar techninį režimą, sistema stabdoma.
-2. **Vonios OVR** – Drėgmei >80% aktyvuojamas 100% režimas. Išsijungia tik jei <70% išsilaiko 5 min.
-3. **Armed Away** – Jei signalizacija „Armed Away“ ir CO₂ ≥ 800 ppm, atliekamas vienkartinis išvėdinimas, po to sistema išjungiama.
-4. **Gartraukis** – Automatinė slėgio kompensacija pagal gartraukio galią.
-5. **Langų apsauga** – Jei langai atidaryti >10 min., vėdinimas stabdomas.
-6. **Day / Night režimas** – Naktį palaikomas bazinis lygis, dieną reguliuojama pagal CO₂.
+**Important:**  
+The system architecture, code, and documentation were developed with assistance from **Gemini** and **ChatGPT** AI models.
 
 ---
 
-## 🍳 Gartraukio Režimas
+# ✨ Key Features
 
-Sistema automatiškai kompensuoja gartraukio ištraukiamą orą didindama tiekimą (IN) ir ribodama ištraukimą (OUT), sukurdama **teigiamą slėgį**. Tai neleidžia dūmams grįžti į kambarį ir neleidžia siurbti šalto oro per plyšius.
+### 🧠 Intelligent Ventilation Control
+- Real-time CO₂-based ventilation regulation
+- Multi-level priority control system
+- Automatic day/night operation
+- Adaptive learning based on historical data
 
-### Lygiai pagal galią
+### 🍳 Kitchen Hood Compensation
+- Detects hood activity via power sensor
+- Creates **positive pressure** to prevent smoke return
+- Dynamic IN/OUT fan balancing
+- Automatic post-run odor removal
 
-| Gartraukio galia | Tiekimas | Ištraukimas |
-|------------------|--------------|-------------------|
-| ≥ 85W (L1)       | 80%          | 45%               |
-| ≥ 105W (L2)      | 90%          | 50%               |
-| ≥ 145W (L3)      | 100%         | 55%               |
+### 📈 Rate-Based Boost
+- Detects **CO₂ rise speed (ppm/min)**
+- Activates ventilation boost before CO₂ peaks
+- Smart hold and cooldown logic
+- Early stop when air quality improves
 
-Tikslas – sumažinti neigiamą slėgį namuose ir išvengti oro siurbimo per plyšius.
-
-### Post-run (po išjungimo)
-
-- Trukmė: 5 / 8 / 12 min. (pagal gartraukio veikimo intensyvumą)
-- Režimas: **IN 65% / OUT 65%**
-- Tikslas: ramus, subalansuotas kvapų pašalinimas
-
-> Jei langai ilgai atidaryti – gartraukio kompensavimo režimas ignoruojamas.
-
----
-
-## 📊 Bazinis Vėdinimas Pagal CO₂
-
-| CO₂ lygis (ppm) | Ventiliatoriaus greitis (%) |
-|-----------------|----------------------------|
-| < 650           | 20%                        |
-| 650–709         | 45%                        |
-| 710–849         | 55%                        |
-| 850–1099        | 70%                        |
-| ≥ 1100          | 100%                       |
-
-Sistema reguliuoja **IN ir OUT vienodai** (subalansuotas režimas), išskyrus gartraukio veikimo metu.
+### 🤖 AI-Assisted Analysis
+- Gemini AI interprets system behavior
+- Natural language queries via Telegram
+- Smart log gating for efficient analysis
+- Automatic anomaly explanations
 
 ---
 
-## 📈 Aktyvus Vėdinimas (Boost)
+# 🧠 Real-Time Control Logic
 
-Sistema reaguoja į CO₂ kilimo greitį (ppm/min), ne tik į absoliučią reikšmę.
+Decisions are executed using strict priority order:
 
-- **Slenkstis:** ≥ 12 ppm/min
-- Reikalingi 2 patvirtinimai iš eilės
-- **Hold:** 15 min
-- **Cooldown:** 20 min tarp ciklų
-- Leidžiama tik jei CO₂ ≥ (auto slenkstis − 50)
-- Jei CO₂ pradeda kristi – Boost nutraukiamas anksčiau
-
-Boost režime IN ir OUT pakeliami bent iki 55%.
+1. **STOP FLAGS** – System halted during faults or technical modes  
+2. **Bathroom OVR** – >80% humidity activates full ventilation  
+3. **Armed Away** – One-time ventilation when house is empty  
+4. **Kitchen Hood** – Pressure compensation mode  
+5. **Window Guard** – Ventilation reduced if windows remain open  
+6. **Day / Night Mode** – Baseline ventilation profile
 
 ---
 
-## 🤖 Adaptyvus CO₂ Mokymasis
+# 🍳 Kitchen Hood Mode
 
-Sistema kasdien perskaičiuoja optimalų įsijungimo slenkstį pagal paskutinių 14 dienų istoriją.
+The system compensates for kitchen hood extraction by increasing supply airflow and limiting exhaust airflow, creating **positive pressure** inside the home.
 
-- Atskiriami darbo dienų ir savaitgalių modeliai
-- Gartraukio veikimo epizodai neįtraukiami į mokymosi statistiką
-- Predictive modelis vertina rizikos lygį ir pasitikėjimą
+### Power Levels
+
+| Hood Power | Supply | Exhaust |
+|------------|--------|--------|
+| ≥ 85W (L1) | 80% | 45% |
+| ≥ 105W (L2) | 90% | 50% |
+| ≥ 145W (L3) | 100% | 55% |
+
+Goal: prevent smoke return and cold air infiltration.
+
+### Post-Run
+
+After hood shutdown:
+
+- Duration: **5 / 8 / 12 minutes**
+- Mode: **IN 65% / OUT 65%**
+- Purpose: balanced odor removal
+
+> Hood compensation is ignored if windows remain open.
 
 ---
 
-## 🤖 Gemini Analizė ir Auditas
+# 📊 Base Ventilation (CO₂)
 
-Integruotas **Gemini** veikia kaip išmanusis vėdinimo inžinierius. Sąveika vyksta dviem būdais:
+| CO₂ (ppm) | Fan Speed |
+|----------|----------|
+| < 650 | 20% |
+| 650–709 | 45% |
+| 710–849 | 55% |
+| 850–1099 | 70% |
+| ≥ 1100 | 100% |
 
-1.  **Techninės komandos:**
-    * `/status` – parodo momentinę CO₂, režimo, gartraukio ir ventiliatorių būseną.
-    * `/co2`, `/fan` – greita konkrečių parametrų peržiūra.
+IN and OUT airflow remain **balanced** except during hood compensation.
 
-2.  **DI užklausos (laisva forma):**
-    * Galima klausti bet ko, pvz.: *„Kada šiandien veikė gartraukis?“* arba *„Kodėl dabar padidintas vėdinimas?“*.
-    * Sistema naudoja **"Smart Gating"** technologiją: istoriniai logai ir taisyklės siunčiami DI modeliui tik tada, kai klausimas to reikalauja.
-    * Atsakymai generuojami dinamiškai, be "n/a" reikšmių, atsižvelgiant į jutiklių būklę.
+---
+
+# 📈 Active Ventilation Boost
+
+The system reacts to **CO₂ rise speed**, not only the absolute level.
+
+Boost conditions:
+
+- Threshold ≥ **12 ppm/min**
+- **2 confirmations** required
+- **Hold:** 15 minutes
+- **Cooldown:** 20 minutes
+- Allowed only if CO₂ ≥ *(auto threshold − 50)*
+
+Boost raises airflow to **at least 55%**.
+
+---
+
+# 🤖 Adaptive CO₂ Learning
+
+The system recalculates the optimal activation threshold daily using **14-day history**.
+
+Features:
+
+- Separate weekday / weekend patterns
+- Hood events excluded from learning
+- Predictive risk evaluation
+
+---
+
+# 🤖 Gemini Analysis
+
+Gemini AI acts as an **intelligent ventilation engineer**.
+
+Interaction methods:
+
+### Technical Commands
+- `/status` — current system state
+- `/co2` — indoor CO₂
+- `/fan` — fan speed
+
+### Natural Language Queries
+
+Examples:
+
+> *“When was the kitchen hood active today?”*  
+> *“Why did ventilation increase now?”*
+
+The system uses **Smart Gating** to send logs to the AI model **only when necessary**.
 
 <img width="1256" height="871" alt="Screenshot 2026-02-18 at 20 52 42" src="https://github.com/user-attachments/assets/11930ba9-006c-4084-bae4-642ccb76077f" />
 
 ---
 
-## 📊 Telemetrija ir Home Assitant
+# 📊 Telemetry and Home Assistant
 
-Sistema užtikrina aiškų ir skaidrų duomenų stebėjimą realiuoju laiku. Visi sprendimai fiksuojami struktūrizuotuose loguose ir gali būti analizuojami per Home Assistant ar DI asistentą.
+All system decisions are logged and observable in real time.
 
-- **Realaus laiko rodikliai:** CO₂ (ppm), ventiliatorių IN / OUT greitis (%), lauko ir tiekiamo oro temperatūra, drėgmė bei gartraukio būsena.
-- **Režimų stebėjimas:** Diena / Naktis, Vonios OVR, Armed Away, Rate Boost ir Gartraukio lygis su aktyvia kompensacija.
-- **Efektyvumo įžvalgos:** Galima įvertinti, kada ir kodėl aktyvuojamas Boost, kiek trunka gartraukio "post-run" fazė bei kaip keičiasi namų mikroklimatas paros eigoje.
-- **AI analizė:** Gemini naudoja kontekstinį sistemos „snapshot“, kad paaiškintų sprendimus ir aptiktų galimas anomalijas.
+Available telemetry:
 
-Visa telemetrija generuojama Node-RED viduje; Home Assistant naudojamas tik sensorių ir valdymo integracijai.
+- CO₂ concentration
+- fan speeds (IN / OUT)
+- outdoor temperature
+- supply air temperature
+- humidity
+- hood activity
+
+Operational states include:
+
+- Day / Night
+- Bathroom OVR
+- Armed Away
+- Rate Boost
+- Hood compensation
+
+Home Assistant acts primarily as the **sensor and integration layer**, while all logic runs inside **Node-RED**.
 
 <img width="1353" height="876" alt="Screenshot 2026-02-12 at 22 44 38" src="https://github.com/user-attachments/assets/1fe7d7c5-12a0-4346-b5e2-797aa92df2a8" />
 
 ---
 
-## 🧹 Filtrai
+# 🧹 Filter Monitoring
 
-- Skaičiuojamos realios ventiliatoriaus darbo valandos
-- Rodomas filtrų nusidėvėjimo procentas
-- Sistema įspėja apie artėjantį aptarnavimą
+The system tracks filter wear based on **real fan runtime**.
+
+Features:
+
+- effective filter runtime calculation
+- filter wear percentage
+- maintenance reminders
 
 ---
 
-## 🗂️ Duomenų Kaupimas
+# 🗂 Data Storage
 
-- JSONL logai sistemos duomenimis.
-- Visi duomenys turi **versijavimą**, kad keičiantis logikai (pvz., atsiradus naujiems sensoriams), mokymosi algoritmai ir DI galėtų teisingai interpretuoti istorinius laikotarpius.
-- Saugojimo politika pritaikyta ilgalaikei analizei ir DI modelio mokymui.
+System data is stored as **JSONL logs**.
+
+Key principles:
+
+- versioned telemetry schema
+- long-term historical storage
+- compatibility with evolving sensor sets
+- suitable for AI-based analysis
+
+---
+
+# ⚙ Minimum Requirements
+
+To run the system you need:
+
+### Software
+- **Home Assistant**
+- **Node-RED**
+- **Komfovent ventilation unit**
+
+### Required Sensors
+- Indoor **CO₂ sensor**
+- Indoor **humidity sensor**
+- **Outdoor temperature** sensor
+
+### Recommended Sensors
+- window sensors
+- kitchen hood power sensor
+- bathroom humidity sensor
+- alarm / occupancy state
