@@ -42,32 +42,443 @@
         "y": 40,
         "wires": [
             [
-                "abcfa11de1d5444a"
+                "460a7dfa8f63bc89"
             ]
         ]
     },
     {
-        "id": "abcfa11de1d5444a",
+        "id": "ebcf04a7c62df620",
         "type": "function",
         "z": "6ff955ee3e10e431",
-        "name": "Classify (slash only)",
-        "func": "const t = (msg.user_text || '').trim();\nconst tl = t.toLowerCase();\n\n// Visi quick statusai tik su / (kad 'co2' netaptų statusu)\nlet intent = 'ai';\n\nif (tl === '/start' || tl === '/help' || tl === '/h') intent = 'help';\nelse if (tl === '/status') intent = 'status';\nelse if (tl === '/co2') intent = 'co2';\nelse if (tl === '/fan') intent = 'fan';\nelse if (tl === '/mode') intent = 'mode';\nelse if (tl === '/boost') intent = 'boost';\nelse if (tl === '/humidity') intent = 'humidity';\nelse if (tl === '/outdoor') intent = 'outdoor';\nelse if (tl === '/matrix') intent = 'matrix';  \nelse if (tl === '/shadow') intent = 'shadow';  \n\nmsg.intent = intent;\nreturn msg;",
+        "name": "Reply: /status",
+        "func": "const ctx = (msg.ai_context && typeof msg.ai_context === 'object')\n  ? msg.ai_context\n  : (flow.get('control_context_last') || {});\n\nconst ha = global.get('homeassistant') || {};\nconst states =\n  ha?.homeAssistant?.states ||\n  ha?.homeassistant?.states ||\n  ha?.states ||\n  {};\n\nconst ents = global.get('komfovent_entities') || {};\nconst pred = global.get('predictive_last') || {};\n\nfunction getState(id) {\n  if (!id) return null;\n  const raw = states?.[id]?.state;\n  if (raw === null || raw === undefined) return null;\n  const s = String(raw).trim().toLowerCase();\n  if (s === '' || s === 'unknown' || s === 'unavailable' || s === 'nan') return null;\n  return raw;\n}\n\nfunction getNum(id) {\n  const raw = getState(id);\n  if (raw === null) return null;\n  const n = Number(raw);\n  return Number.isFinite(n) ? n : null;\n}\n\nfunction fmtNum(v, suffix = '', decimals = 0) {\n  const n = Number(v);\n  if (!Number.isFinite(n)) return '--';\n  return `${n.toFixed(decimals)}${suffix}`;\n}\n\n// --- LIVE reikšmės yra prioritetas ---\nconst liveCo2 = getNum(ents.co2);\nconst liveMode = getState(ents.mode) || 'n/a';\nconst outdoor = getNum(ents.outdoor);\nconst hum = getNum(ents.humidity);\nconst fanActual = getNum(ents.fan_actual);\n\n// Ventiliatorių pora iš context arba fallback į actual\nconst fanIn = Number.isFinite(Number(ctx?.fans?.fan_in)) ? Number(ctx.fans.fan_in) : null;\nconst fanOut = Number.isFinite(Number(ctx?.fans?.fan_out)) ? Number(ctx.fans.fan_out) : null;\n\n// Langai\nconst windowsState = String(getState(ents.windows) || '').toLowerCase();\nconst windowsOpen = (windowsState === 'on');\nconst windowsLong = (ctx.windows_long_open === true);\n\n// Predictive\nconst predictiveEnabled = String(getState(ents.predictive_enable || 'input_boolean.komfovent_predictive') || 'off').toLowerCase() === 'on';\nconst predictiveActive = String(liveMode).trim().toLowerCase() === 'predictive';\n\n// Gartraukis\nlet hoodStatus = 'Išjungtas';\nconst hoodPower = getNum(ents.hood_power || 'sensor.hood_socket_power');\nif (Number.isFinite(hoodPower) && hoodPower >= 75) {\n  const lvl = (hoodPower >= 160) ? 3 : (hoodPower >= 110) ? 2 : 1;\n  hoodStatus = `Įjungtas (${lvl} lygis)`;\n}\n\n// Langų tekstas\nlet windowsText = 'Uždaryti';\nif (windowsLong) windowsText = 'Ilgai atidaryti';\nelse if (windowsOpen) windowsText = 'Atidaryti';\n\n// Fan tekstas\nlet fanText = '--';\nif (Number.isFinite(fanIn) && Number.isFinite(fanOut)) {\n  fanText = `${Math.round(fanIn)}% / ${Math.round(fanOut)}%`;\n} else if (Number.isFinite(fanActual)) {\n  fanText = `${Math.round(fanActual)}%`;\n}\n\n// Predictive prognozė\nlet predictiveForecast = 'nėra';\nconst predCo2f30 = Number.isFinite(Number(pred.co2_f_30)) ? Number(pred.co2_f_30) : null;\nconst predRisk = Number.isFinite(Number(pred.risk_score)) ? Number(pred.risk_score) : null;\n\nif (Number.isFinite(liveCo2) && Number.isFinite(predCo2f30)) {\n  predictiveForecast = `${Math.round(liveCo2)} → ${Math.round(predCo2f30)} ppm`;\n}\n\nconst now = new Date();\nconst timeStr = now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' });\nconst dateStr = now.toLocaleDateString('lt-LT');\n\nconst content = [\n  `🏠 *Namų būsena*`,\n  `• CO₂: *${fmtNum(liveCo2, ' ppm', 0)}*`,\n  `• Lauko temp.: *${fmtNum(outdoor, '°C', 1)}*`,\n  `• Drėgmė: *${fmtNum(hum, '%', 1)}*`,\n  `• Ventiliatoriai: *${fanText}*`,\n  `• Režimas: *${String(liveMode)}*`,\n  `• Langai: *${windowsText}*`,\n  `• Gartraukis: *${hoodStatus}*`,\n  ``,\n  `🧠 *Predictive*`,\n  `• Modulis: *${predictiveEnabled ? 'Įjungtas' : 'Išjungtas'}*`,\n  `• Valdymas: *${predictiveActive ? 'Aktyvus' : 'Neaktyvus'}*`,\n  `• Rizika: *${predRisk !== null ? predRisk + '/10' : '--'}*`,\n  `• Prognozė: *${predictiveForecast}*`,\n  ``,\n  `🕒 _Atnaujinta: ${timeStr} (${dateStr})_`\n].join('\\n');\n\nmsg.payload = {\n  chatId: msg.chatId,\n  type: 'message',\n  content,\n  options: { parse_mode: 'Markdown' }\n};\n\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 530,
-        "y": 40,
+        "x": 480,
+        "y": 140,
         "wires": [
             [
-                "f7b2bdd1b471fa7d"
+                "5d49fc4b1470e1ec"
             ]
         ]
     },
     {
-        "id": "f7b2bdd1b471fa7d",
+        "id": "f739d6707013982c",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Reply: /co2",
+        "func": "const g = global.get('homeassistant') || {};\nconst states = g.states || g.homeAssistant?.states || g.homeassistant?.states || {};\nconst ents = global.get('komfovent_entities') || {};\nconst v = parseFloat(states[ents.co2]?.state);\n\nconst now = new Date();\nconst timeStr = now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' });\nconst dateStr = now.toLocaleDateString('lt-LT');\n\nconst content = [\n  `☁️ *Anglies dvideginis*`,\n  `• Dabartinis lygis: **${isFinite(v) ? Math.round(v) + ' ppm' : '--'}**`,\n  '',\n  `🕒 _Atnaujinta: ${timeStr} (${dateStr})_`\n].join('\\n');\n\nmsg.payload = { chatId: msg.chatId, type: 'message', content, options: { parse_mode: \"Markdown\" } };\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 470,
+        "y": 220,
+        "wires": [
+            [
+                "5d49fc4b1470e1ec"
+            ]
+        ]
+    },
+    {
+        "id": "056c66f67642fd8f",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Reply: /fan",
+        "func": "const g = global.get('homeassistant') || {};\nconst states = g.states || g.homeAssistant?.states || g.homeassistant?.states || {};\nconst ents = global.get('komfovent_entities') || {};\nconst v = parseFloat(states[ents.fan_actual]?.state);\n\nconst now = new Date();\nconst timeStr = now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' });\nconst dateStr = now.toLocaleDateString('lt-LT');\n\nconst content = [\n  `📊 *Ventiliatorių greitis*`,\n  `• Intensyvumas: **${isFinite(v) ? Math.round(v) + '%' : '--'}**`,\n  '',\n  `🕒 _Atnaujinta: ${timeStr} (${dateStr})_`\n].join('\\n');\n\nmsg.payload = { chatId: msg.chatId, type: 'message', content, options: { parse_mode: \"Markdown\" } };\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 470,
+        "y": 260,
+        "wires": [
+            [
+                "5d49fc4b1470e1ec"
+            ]
+        ]
+    },
+    {
+        "id": "bec1627ba76b405e",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Reply: /mode",
+        "func": "const g = global.get('homeassistant') || {};\nconst states = g.states || g.homeAssistant?.states || g.homeassistant?.states || {};\nconst ents = global.get('komfovent_entities') || {};\nconst m = states[ents.mode]?.state;\n\nconst now = new Date();\nconst timeStr = now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' });\nconst dateStr = now.toLocaleDateString('lt-LT');\n\nconst content = [\n  `⚙️ *Veikimo režimas*`,\n  `• Dabartinis: **${m || '--'}**`,\n  '',\n  `🕒 _Atnaujinta: ${timeStr} (${dateStr})_`\n].join('\\n');\n\nmsg.payload = { chatId: msg.chatId, type: 'message', content, options: { parse_mode: \"Markdown\" } };\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 300,
+        "wires": [
+            [
+                "5d49fc4b1470e1ec"
+            ]
+        ]
+    },
+    {
+        "id": "5a5aa54bf7a78547",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Reply: /boost",
+        "func": "const g = global.get('homeassistant') || {};\nconst states = g.states || g.homeAssistant?.states || g.homeassistant?.states || {};\nconst ents = global.get('komfovent_entities') || {};\n\nconst raw = states[ents.boost_ha]?.state;\nconst status = (raw === 'on' || raw === 'true') ? \"Aktyvus\" : \"Išjungtas\";\n\nconst now = new Date();\nconst timeStr = now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' });\nconst dateStr = now.toLocaleDateString('lt-LT');\n\nconst content = [\n  `🚀 *Aktyvus vėdinimas*`,\n  `• Būsena: **${status}**`,\n  '',\n  `🕒 _Atnaujinta: ${timeStr} (${dateStr})_`\n].join('\\n');\n\nmsg.payload = { chatId: msg.chatId, type: 'message', content, options: { parse_mode: \"Markdown\" } };\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 340,
+        "wires": [
+            [
+                "5d49fc4b1470e1ec"
+            ]
+        ]
+    },
+    {
+        "id": "3816232c6a7c071d",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Reply: /humidity",
+        "func": "const g = global.get('homeassistant') || {};\nconst states = g.states || g.homeAssistant?.states || g.homeassistant?.states || {};\nconst ents = global.get('komfovent_entities') || {};\nconst v = parseFloat(states[ents.humidity]?.state);\n\nconst now = new Date();\nconst timeStr = now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' });\nconst dateStr = now.toLocaleDateString('lt-LT');\n\nconst content = [\n  `💧 *Drėgmės lygis*`,\n  `• Vonioje: **${isFinite(v) ? v.toFixed(1) + '%' : '--'}**`,\n  '',\n  `🕒 _Atnaujinta: ${timeStr} (${dateStr})_`\n].join('\\n');\n\nmsg.payload = { chatId: msg.chatId, type: 'message', content, options: { parse_mode: \"Markdown\" } };\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 380,
+        "wires": [
+            [
+                "5d49fc4b1470e1ec"
+            ]
+        ]
+    },
+    {
+        "id": "6c040c32e46a9512",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Reply: /outdoor",
+        "func": "const g = global.get('homeassistant') || {};\nconst states = g.states || g.homeAssistant?.states || g.homeassistant?.states || {};\nconst ents = global.get('komfovent_entities') || {};\nconst v = parseFloat(states[ents.outdoor]?.state);\n\nlet icon = (v >= 10) ? \"☀️\" : \"❄️\";\nconst now = new Date();\nconst timeStr = now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' });\nconst dateStr = now.toLocaleDateString('lt-LT');\n\nconst content = [\n  `${icon} *Lauko temperatūra*`,\n  `• Temperatūra: **${isFinite(v) ? v.toFixed(1) + '°C' : '--'}**`,\n  '',\n  `🕒 _Atnaujinta: ${timeStr} (${dateStr})_`\n].join('\\n');\n\nmsg.payload = { chatId: msg.chatId, type: 'message', content, options: { parse_mode: \"Markdown\" } };\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 480,
+        "y": 420,
+        "wires": [
+            [
+                "5d49fc4b1470e1ec"
+            ]
+        ]
+    },
+    {
+        "id": "96fb7365808dcd7c",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Build AI context (paths)",
+        "func": "const TZ = 'Europe/Vilnius';\nconst logBase = '/data/logs/komfovent';\nconst stateBase = '/data/state/komfovent';\n\nfunction ltDate(d) {\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ,\n    year: 'numeric',\n    month: '2-digit',\n    day: '2-digit'\n  }).format(d);\n}\n\nlet targetDate = new Date();\nconst query = (msg.user_text || \"\").toLowerCase();\n\n// Jei užklausoje minimas \"vakar\", naudojame vakarykštę datą\nif (query.includes(\"vakar\")) {\n  targetDate.setDate(targetDate.getDate() - 1);\n}\n// Kitu atveju (įskaitant \"šiandien\" arba tiesiog klausimą) - naudojame šiandieną\n\nconst day = ltDate(targetDate);\n\nmsg._logPaths = {\n  telemetry: `${logBase}/komfovent_telemetry_${day}.jsonl`,\n  control: `${logBase}/komfovent_control_${day}.jsonl`,\n  predictive: `${logBase}/komfovent_predictive_${day}.jsonl`,\n  filters: `${logBase}/komfovent_filters_${day}.jsonl`,\n  matrix: `${stateBase}/prediction_matrix.json`,\n  filters_state: `${stateBase}/filters_state.json`\n};\n\nnode.status({ fill: \"blue\", shape: \"dot\", text: `Data: ${day}` });\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 510,
+        "y": 580,
+        "wires": [
+            [
+                "eb5198f89b492515"
+            ]
+        ]
+    },
+    {
+        "id": "eb5198f89b492515",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Tail telemetry cmd",
+        "func": "const p = msg._logPaths || {};\n\n// Skaitome daugiau istorijos, kad AI galėtų atsakyti apie:\n// - paskutinį Predictive / Langai / OVR aktyvumą\n// - režimų seką\n// - trumpą auditą be \"nematau logų\"\n//\n// Nauji limitai:\n// - Telemetry: 80\n// - Control: 120\n// - Predictive: 60\n// - Filters: 20\n\nmsg.payload = `bash -lc '` +\n  `if [ -f \"${p.matrix}\" ]; then echo \"=== MATRIX ===\"; cat \"${p.matrix}\"; fi; ` +\n  `if [ -f \"${p.filters_state}\" ]; then echo \"=== FILTERS_STATE ===\"; cat \"${p.filters_state}\"; fi; ` +\n  `if [ -f \"${p.telemetry}\" ] && [ \"${p.telemetry}\" != \"undefined\" ]; then echo \"=== $(basename ${p.telemetry}) ===\"; tail -n 80 \"${p.telemetry}\"; fi; ` +\n  `if [ -f \"${p.control}\" ] && [ \"${p.control}\" != \"undefined\" ]; then echo \"=== $(basename ${p.control}) ===\"; tail -n 120 \"${p.control}\"; fi; ` +\n  `if [ -f \"${p.predictive}\" ] && [ \"${p.predictive}\" != \"undefined\" ]; then echo \"=== $(basename ${p.predictive}) ===\"; tail -n 60 \"${p.predictive}\"; fi; ` +\n  `if [ -f \"${p.filters}\" ] && [ \"${p.filters}\" != \"undefined\" ]; then echo \"=== $(basename ${p.filters}) ===\"; tail -n 20 \"${p.filters}\"; fi; ` +\n  `'`;\n\nnode.status({ fill: \"blue\", shape: \"dot\", text: \"Reading logs: T80 C120 P60 F20\" });\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 750,
+        "y": 460,
+        "wires": [
+            [
+                "cde32ceab90e3ab7"
+            ]
+        ]
+    },
+    {
+        "id": "cde32ceab90e3ab7",
+        "type": "exec",
+        "z": "6ff955ee3e10e431",
+        "command": "",
+        "addpay": true,
+        "append": "",
+        "useSpawn": "false",
+        "timer": "",
+        "oldrc": false,
+        "name": "Exec: tail telemetry (stdout only)",
+        "x": 990,
+        "y": 460,
+        "wires": [
+            [
+                "47276443c90c79c0"
+            ],
+            [],
+            []
+        ]
+    },
+    {
+        "id": "47276443c90c79c0",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Capture All Logs",
+        "func": "// PATAISYMAS: Logų duomenys perkeliami į saugų kintamąjį.\nlet out = msg.payload;\nif (Buffer.isBuffer(out)) out = out.toString('utf8');\n\nconst logs = String(out || '').trim();\n\n// Išsaugome logus prompt builder'iui\nmsg._all_logs_context = logs;\n\n// Toliau nebevykdom papildomo Exec, todėl msg.payload nekeičiam.\n\nif (logs.length > 0) {\n    node.status({ fill: \"green\", shape: \"dot\", text: `Surinkta ${logs.length} simbolių` });\n} else {\n    node.status({ fill: \"yellow\", shape: \"ring\", text: \"Logų failai tušti\" });\n}\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 130,
+        "y": 740,
+        "wires": [
+            [
+                "b75b36bb7aee20a7"
+            ]
+        ]
+    },
+    {
+        "id": "5d49fc4b1470e1ec",
+        "type": "telegram sender",
+        "z": "6ff955ee3e10e431",
+        "name": "Telegram Out",
+        "bot": "tg_bot_cfg_komfovent",
+        "haserroroutput": false,
+        "outputs": 1,
+        "x": 920,
+        "y": 200,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "63ae068f91114f13",
+        "type": "link out",
+        "z": "6ff955ee3e10e431",
+        "name": "AI Out: Control Query",
+        "mode": "link",
+        "links": [
+            "1ed0cbe82dd78d30",
+            "2ce33c61ffe1a0b7"
+        ],
+        "x": 415,
+        "y": 680,
+        "wires": []
+    },
+    {
+        "id": "5e34d037680f59dc",
+        "type": "link in",
+        "z": "6ff955ee3e10e431",
+        "name": "AI In: Control Context",
+        "links": [
+            "a1ae1f426339e402",
+            "b92350a17d9b1a04"
+        ],
+        "x": 745,
+        "y": 140,
+        "wires": [
+            [
+                "ea555fdc1f28ec24"
+            ]
+        ]
+    },
+    {
+        "id": "ea555fdc1f28ec24",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Store last Control Context",
+        "func": "// Store last Control Context v4.4.1 (Bugfix)\n// Tikslas: teisingai paimti kontekstą iš Link In žinutės.\n// Problema: Control flow siunčia msg.ai_context, bet senas kodas žiūrėjo tik į msg.payload.\n\nlet ctx = null;\n\n// 1) Pirmas prioritetas: msg.ai_context (taip siunčia Control tab)\nif (msg && typeof msg === 'object' && msg.ai_context && typeof msg.ai_context === 'object') {\n    ctx = msg.ai_context;\n}\n\n// 2) Fallback: msg.payload.ai_context (jei kažkur supakuota į payload)\nif (!ctx && msg && typeof msg === 'object' && msg.payload && typeof msg.payload === 'object' && msg.payload.ai_context) {\n    ctx = msg.payload.ai_context;\n}\n\n// 3) Fallback: jei payload pats yra kontekstas\nif (!ctx && msg && typeof msg === 'object' && msg.payload && typeof msg.payload === 'object') {\n    // Heuristika: jei panašu į kontekstą (turi bent vieną tipinį lauką)\n    const p = msg.payload;\n    if (p.co2 !== undefined || p.rate_current !== undefined || p.fans !== undefined || p.rules !== undefined) {\n        ctx = p;\n    }\n}\n\n// 4) Fallback: jei payload yra JSON string\nif (!ctx && msg && typeof msg === 'object' && typeof msg.payload === 'string') {\n    try {\n        const parsed = JSON.parse(msg.payload);\n        if (parsed && typeof parsed === 'object') {\n            if (parsed.ai_context && typeof parsed.ai_context === 'object') ctx = parsed.ai_context;\n            else if (parsed.co2 !== undefined || parsed.rate_current !== undefined || parsed.fans !== undefined || parsed.rules !== undefined) ctx = parsed;\n        }\n    } catch (e) {\n        // ignore\n    }\n}\n\n// Jei vis tiek nėra – tiesiog nieko nedarom (kad nesugriautume srauto)\nif (!ctx || typeof ctx !== 'object') {\n    return null;\n}\n\n// Minimalus normalizavimas, kad Prompt Builder turėtų stabilias šaknis\nctx.fans = (ctx.fans && typeof ctx.fans === 'object') ? ctx.fans : {};\nctx.rules = (ctx.rules && typeof ctx.rules === 'object') ? ctx.rules : {};\n\n// Įrašom į flow kaip source-of-truth AI Gateway pusėje\nflow.set('control_context_last', ctx);\nflow.set('control_context_last_ts', Date.now());\n\n// Šis mazgas neturi tęsti srauto (tik “cache”)\nreturn null;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 890,
+        "y": 140,
+        "wires": [
+            [
+                "5d49fc4b1470e1ec"
+            ]
+        ]
+    },
+    {
+        "id": "4b57e38bbb17924e",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Reply: /predictive",
+        "func": "const pred = global.get('predictive_last') || {};\nconst matrix = global.get('prediction_matrix') || {};\nconst ctx = flow.get('control_context_last') || {};\n\nconst ha = global.get('homeassistant') || {};\nconst states =\n    ha?.homeAssistant?.states ||\n    ha?.homeassistant?.states ||\n    ha?.states ||\n    {};\n\nconst ents = global.get('komfovent_entities') || {};\n\nfunction getState(id) {\n    if (!id) return null;\n    const raw = states?.[id]?.state;\n    if (raw === null || raw === undefined) return null;\n    const s = String(raw).trim().toLowerCase();\n    if (s === '' || s === 'unknown' || s === 'unavailable' || s === 'nan') return null;\n    return raw;\n}\n\nfunction getNum(id) {\n    const raw = getState(id);\n    if (raw === null) return null;\n    const n = Number(raw);\n    return Number.isFinite(n) ? n : null;\n}\n\nconst now = new Date();\nconst timeStr = now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' });\nconst dateStr = now.toLocaleDateString('lt-LT');\n\n// LIVE būsena\nconst liveMode = String(getState(ents.mode) || 'nežinomas');\nconst liveCo2 = getNum(ents.co2);\nconst predictiveEnabled = String(getState(ents.predictive_enable || 'input_boolean.komfovent_predictive') || 'off').toLowerCase() === 'on';\nconst controlActive = liveMode.trim().toLowerCase() === 'predictive';\n\n// Predictive snapshot\nconst snapshotCo2 = Number.isFinite(Number(pred.co2)) ? Number(pred.co2) : null;\nconst f30 = Number.isFinite(Number(pred.co2_f_30)) ? Number(pred.co2_f_30) : null;\nconst f60 = Number.isFinite(Number(pred.co2_f_60)) ? Number(pred.co2_f_60) : null;\nconst risk = Number.isFinite(Number(pred.risk_score)) ? Number(pred.risk_score) : null;\n\nconst growth30 =\n    (Number.isFinite(f30) && Number.isFinite(snapshotCo2))\n        ? f30 - snapshotCo2\n        : null;\n\nconst growth60 =\n    (Number.isFinite(f60) && Number.isFinite(snapshotCo2))\n        ? f60 - snapshotCo2\n        : null;\n\nconst source = pred.forecast_source_30 ?? 'fallback';\nconst confidence = matrix?.confidence_info?.level ?? 'unknown';\nconst training = matrix?.training_days_actual ?? 0;\n\nlet snapshotLine = '';\nif (Number.isFinite(snapshotCo2) && Number.isFinite(liveCo2) && Math.round(snapshotCo2) !== Math.round(liveCo2)) {\n    snapshotLine = `• Snapshot skaičiavimui: *${snapshotCo2} ppm*\\n`;\n} else if (Number.isFinite(snapshotCo2)) {\n    snapshotLine = `• Snapshot skaičiavimui: *${snapshotCo2} ppm*\\n`;\n}\n\nmsg.payload = {\n    chatId: msg.chatId,\n    type: \"message\",\n    content:\n        `🧠 *Predictive modulis*\\n\\n` +\n        `• Modulis: *${predictiveEnabled ? 'Įjungtas' : 'Išjungtas'}*\\n` +\n        `• Valdymas: *${controlActive ? 'Aktyvus' : 'Neaktyvus'}*\\n` +\n        `• Dabartinis režimas: *${liveMode}*\\n\\n` +\n        `📈 *Prognozė*\\n\\n` +\n        `• CO₂ dabar (live): *${Number.isFinite(liveCo2) ? liveCo2 + ' ppm' : 'n/a'}*\\n` +\n        snapshotLine +\n        `• 30 min: *${Number.isFinite(f30) ? f30 + ' ppm' : 'n/a'}*\\n` +\n        `• 60 min: *${Number.isFinite(f60) ? f60 + ' ppm' : 'n/a'}*\\n\\n` +\n        `• Augimas 30 min: *${growth30 !== null ? growth30 + ' ppm' : 'n/a'}*\\n` +\n        `• Augimas 60 min: *${growth60 !== null ? growth60 + ' ppm' : 'n/a'}*\\n\\n` +\n        `• Rizika: *${risk !== null ? risk + '/10' : 'n/a'}*\\n` +\n        `• Prognozės šaltinis: *${source}*\\n\\n` +\n        `🧬 *Modelis*\\n\\n` +\n        `• Tikslumas: *${confidence}*\\n` +\n        `• Mokymosi dienos: *${training}*\\n\\n` +\n        `🕒 _Atnaujinta: ${timeStr} (${dateStr})_`,\n    options: { parse_mode: \"Markdown\" }\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 490,
+        "y": 460,
+        "wires": [
+            [
+                "5d49fc4b1470e1ec"
+            ]
+        ]
+    },
+    {
+        "id": "cdf0a918f5808d27",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Build prompt (1 message)",
+        "func": "const ctx = (msg.ai_context && typeof msg.ai_context === 'object')\n  ? msg.ai_context\n  : (flow.get('control_context_last') || {});\n\nconst snap = msg._audit_snapshot || {};\nconst rawLogs = String(msg._all_logs_context || \"\");\nconst userText = String(msg.user_text || \"\").trim();\nconst qLower = userText.toLowerCase();\nconst intent = msg.intent;\n\nconst pred = global.get('predictive_last') || {};\nconst liveMode = String(ctx.mode || 'n/a');\nconst predictiveEnabled = (ctx.predictive_enabled === true);\nconst predictiveActive = (liveMode === 'Predictive');\n\n// --- 1) Ar istorinis klausimas ---\nconst isHistoryQuery = /(kada|paskutin|buvo|istorij|log|vyko|įvyko|prieš|vakar|anksčiau|valand|šiandien)/i.test(qLower);\nconst isPast = isHistoryQuery || intent === 'audit';\n\n// --- 2) Žali logai ---\nlet logsBlock = isPast ? rawLogs.slice(-18000) : rawLogs.slice(-8000);\n\n// --- 3) Real-time faktai ---\nconst facts = [];\n\nif (ctx.co2 !== undefined && ctx.co2 !== null) {\n  facts.push(`Dabartinis CO₂: ${Math.round(Number(ctx.co2))} ppm`);\n}\nif (ctx.rate_current !== undefined && ctx.rate_current !== null) {\n  facts.push(`CO₂ kilimo greitis: ${Number(ctx.rate_current).toFixed(2)} ppm/min`);\n}\nif (ctx.fans && ctx.fans.fan_in !== undefined && ctx.fans.fan_out !== undefined) {\n  facts.push(`Ventiliatoriai: ${ctx.fans.fan_in}% / ${ctx.fans.fan_out}%`);\n}\nif (ctx.windows_long_open === true) facts.push(`Langai ilgai atidaryti: TAIP`);\nelse facts.push(`Langai ilgai atidaryti: NE`);\n\nif (ctx.ovr_active === true) facts.push(`OVR aktyvus: TAIP`);\nelse facts.push(`OVR aktyvus: NE`);\n\nif (ctx.fans && ctx.fans.hood === true) facts.push(`Gartraukis aktyvus: TAIP`);\nelse facts.push(`Gartraukis aktyvus: NE`);\n\nfacts.push(`Dabartinis control režimas: ${liveMode}`);\n\n// --- 4) Predictive source of truth ---\nconst predBlock = `\nPREDICTIVE SOURCE OF TRUTH:\n- predictive_enabled: ${predictiveEnabled}\n- predictive_control_active: ${predictiveActive}\n- current_mode: ${liveMode}\n- predictive_risk: ${pred.risk_score ?? 'n/a'}\n- predictive_co2_now_snapshot: ${pred.co2 ?? 'n/a'}\n- predictive_co2_f_30: ${pred.co2_f_30 ?? 'n/a'}\n- predictive_co2_f_60: ${pred.co2_f_60 ?? 'n/a'}\n- predictive_forecast_source_30: ${pred.forecast_source_30 ?? 'n/a'}\n- predictive_last_ts: ${pred.ts ?? 'n/a'}\n\nTAISYKLĖS:\n- Jei current_mode = Predictive, atsakyk, kad Predictive šiuo metu valdo sistemą.\n- Jei predictive_enabled = true, bet current_mode != Predictive, atsakyk, kad Predictive modulis įjungtas, bet šiuo metu sistemos nevaldo.\n- Jei klausiama \"kada\", laiką pateik žmogui draugišku formatu: pvz. \"šiandien 21:36\", \"vakar 18:10\" arba \"2026-03-16 21:36\".\n- Nenaudok ISO formato kaip 2026-03-16T21:36:16, nebent vartotojas aiškiai prašo techninio formato.\n- Jei atsakymas yra neigiamas, trumpai paaiškink kodėl.\n- Jei duomenyse yra last_predictive_ts / last_windows_ts / last_ovr_ts, PRIVALAI remtis jais atsakydamas į klausimus apie paskutinį kartą.\n- Jei control loguose yra windows_events arba ovr_events > 0, nesakyk, kad informacijos nėra.\n`.trim();\n\n// --- 5) Santrauka istoriniams klausimams ---\nlet auditContext = '';\nif (isPast) {\n  auditContext = `\nPASTAROSIOS ISTORIJOS SANTRAUKA:\n- CO₂: min ${snap.co2?.min ?? '--'}, max ${snap.co2?.max ?? '--'}, vidurkis ${snap.co2?.avg ?? '--'} ppm\n- Maksimalus kilimo greitis: ${snap.rate_max ?? 0} ppm/min\n- Boost įvykiai: ${snap.boost_events ?? 0}\n- Gartraukio įvykiai: ${snap.hood_events ?? 0}\n- Langų įvykiai: ${snap.windows_events ?? 0}\n- OVR įvykiai: ${snap.ovr_events ?? 0}\n- Predictive hard įvykiai: ${snap.predictive_hard_events ?? 0}\n- Paskutinis Predictive: ${snap.last_predictive_ts ?? 'nėra'}\n- Paskutinis Langai: ${snap.last_windows_ts ?? 'nėra'}\n- Paskutinis OVR: ${snap.last_ovr_ts ?? 'nėra'}\n- Alarm būsenos: ${snap.alarm_summary || 'nėra'}\n`.trim();\n}\n\n// --- 6) Klausimo tipas ---\nlet answerStyle = `\nATSAKYMO STILIUS:\n- Rašyk lietuviškai, natūraliai, ne per sausai.\n- Atsakyk 2-4 sakiniais.\n- Pirmas sakinys tegu būna aiškus tiesus atsakymas.\n- Antras sakinys trumpai paaiškina kodėl.\n- Jei klausiama \"kada\", atsakyk šilčiau ir žmogui suprantamai, ne vien pliku timestamp.\n- Jei tinkama, pridėk vieną trumpą interpretaciją, ką tai reiškia sistemai dabar.\n`.trim();\n\nmsg.ai_prompt = `\nEsi Komfovent namų asistentas-inžinierius. Rašyk tik LIETUVIŠKAI.\nKreipkis „Tu“. Be pasisveikinimų. Tonas – aiškus, techniškas, bet žmogiškas.\nNerašyk \"negaliu nustatyti\", jei žemiau yra source-of-truth duomenys.\n\nDABARTINIAI FAKTAI:\n${facts.map(x => `- ${x}`).join('\\n')}\n\n${predBlock}\n\n${auditContext}\n\n${answerStyle}\n\nJei klausiama apie istoriją ar paskutinį kartą, remkis žemiau esančiais logais:\n${logsBlock}\n\nKLAUSIMAS: ${userText}\n`.trim();\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 590,
+        "y": 740,
+        "wires": [
+            [
+                "433da280ca0fe8f5"
+            ]
+        ]
+    },
+    {
+        "id": "433da280ca0fe8f5",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Prepare Gemini request",
+        "func": "const MODEL = 'gemini-2.0-flash';\nconst key = (typeof env !== 'undefined' && env.get('GEMINI_API_KEY')) || flow.get('GEMINI_API_KEY');\n\nif (!key) {\n  node.status({ fill: 'red', shape: 'ring', text: 'Missing API Key' });\n  msg.payload = { chatId: msg.chatId, type: 'message', content: 'AI klaida: nekonfigūruotas API raktas.' };\n  return [msg, null]; // Siunčiame klaidą tiesiai į Telegram Out\n}\n\nmsg.method = 'POST';\nmsg.url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`;\nmsg.headers = { 'Content-Type': 'application/json' };\n\nmsg.payload = {\n  contents: [{ role: 'user', parts: [{ text: msg.ai_prompt || 'Sveikas' }] }],\n  generationConfig: {\n    temperature: 0.3,\n    maxOutputTokens: 1000,\n    topP: 0.8\n  }\n};\n\nnode.status({ fill: 'blue', shape: 'dot', text: `Siunčiama į ${MODEL}...` });\nreturn [null, msg]; // Siunčiame į HTTP Request mazgą",
+        "outputs": 2,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 850,
+        "y": 740,
+        "wires": [
+            [],
+            [
+                "5944086c10a6f826"
+            ]
+        ]
+    },
+    {
+        "id": "5944086c10a6f826",
+        "type": "http request",
+        "z": "6ff955ee3e10e431",
+        "name": "HTTP → Gemini",
+        "method": "use",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": true,
+        "headers": [],
+        "x": 1080,
+        "y": 740,
+        "wires": [
+            [
+                "de086cbcb3ed9711"
+            ]
+        ]
+    },
+    {
+        "id": "de086cbcb3ed9711",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Parse Gemini → Telegram (single msg)",
+        "func": "let txt = '';\nif (!msg.payload?.candidates) return null;\n\ntry {\n  const parts = msg.payload.candidates[0].content.parts;\n  txt = parts.map(p => p.text).filter(Boolean).join('\\n');\n} catch (e) { txt = 'Klaida apdorojant AI.'; }\n\n// --- SAUGUMO FILTRAS TELEGRAMUI ---\n// Pakeičiame apatinius brūkšnius tarpais, kad nesugriautų Markdown\nconst safeTxt = txt.replace(/_/g, ' ');\n\n// Ikonos parinkimas antraštei\nlet icon = \"🌤️\";\nconst state = msg.weatherState;\nconst weatherIcons = {\n  'sunny': \"☀️\", 'cloudy': \"☁️\", 'partlycloudy': \"⛅\",\n  'rainy': \"🌧️\", 'pouring': \"⛈️\", 'snowy': \"❄️\",\n  'fog': \"🌫️\", 'windy': \"💨\"\n};\nif (state && weatherIcons[state]) icon = weatherIcons[state];\n\nmsg.weatherIcon = icon;\nconst isNotify = !!msg.target_app;\nlet finalContent = \"\";\n\nif (isNotify) {\n  // 📱 iOS formatas (jau išvalytas praeitame žingsnyje)\n  finalContent = txt.replace(/[\\*\\_\\`\\#]/g, '').trim();\n} else {\n  // 🤖 Telegram formatas (naudojame safeTxt be pavojingų brūkšnių)\n  if (msg.intent === 'weather') {\n    finalContent = `${icon} *Dienos prognozė ir pasiruošimas*\\n\\n${safeTxt}`;\n  } else if (msg.intent === 'audit') {\n    finalContent = `🔍 *Sistemos auditas*\\n\\n${safeTxt}`;\n  } else {\n    finalContent = safeTxt;\n  }\n  finalContent += `\\n\\n💡 _Atsakymus pateikia Gemini AI._`;\n}\n\nmsg.payload = {\n  content: finalContent,\n  chatId: msg.chatId,\n  type: 'message',\n  options: { parse_mode: \"Markdown\" }\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1350,
+        "y": 740,
+        "wires": [
+            [
+                "93e57766e58feed5"
+            ]
+        ]
+    },
+    {
+        "id": "460a7dfa8f63bc89",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Classify (slash only)",
+        "func": "const t = (msg.user_text || '').trim();\nconst tl = t.toLowerCase();\n\nlet intent = 'ai';\n\nif (tl === '/start' || tl === '/help' || tl === '/h') intent = 'help';\nelse if (tl === '/status') intent = 'status';\nelse if (tl === '/kaina') intent = 'fuel';\nelse if (tl === '/battery') intent = 'battery';\nelse if (tl === '/co2') intent = 'co2';\nelse if (tl === '/fan') intent = 'fan';\nelse if (tl === '/mode') intent = 'mode';\nelse if (tl === '/boost') intent = 'boost';\nelse if (tl === '/humidity') intent = 'humidity';\nelse if (tl === '/outdoor') intent = 'outdoor';\nelse if (tl === '/predictive') intent = 'predictive';\nelse if (tl === '/audit') intent = 'audit';\nelse if (tl === '/orai') intent = 'weather';\n\nmsg.intent = intent;\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 570,
+        "y": 40,
+        "wires": [
+            [
+                "2cbaebdf0d85f5c9"
+            ]
+        ]
+    },
+    {
+        "id": "28120d13c081b49a",
+        "type": "function",
+        "z": "6ff955ee3e10e431",
+        "name": "Reply: Help",
+        "func": "msg.payload = {\n    chatId: msg.chatId,\n    type: 'message',\n    content: [\n        '🌬️ *Namų valdymas*',\n        '',\n        '📍 *Pagrindinės komandos:*',\n        '• /status — 📊 Pilna parametrų suvestinė',\n        '• /kaina — ⛽ Kuro kainos',\n        '• /battery — 🔋 Baterijų būsena',\n        '• /co2 — ☁️ Anglies dvideginio lygis',\n        '• /fan — 📊 Ventiliatorių greitis',\n        '• /mode — ⚙️ Veikimo režimas',\n        '• /boost — 🚀 Aktyvus vėdinimas',\n        '• /humidity — 💧 Drėgmė vonioje',\n        '• /outdoor — ☀️ Lauko temperatūra',\n        '',\n        '📊 *Analitika ir prognozės:*',\n        '• /predictive — 🧠 Predictive būsena ir rizika',\n        '• /orai — 🌤️ Orų prognozė ir apranga (AI)',\n        '• /audit — 🔍 Sistemos auditas (AI)',\n        '',\n        '💡 _Atsakymus pateikia Gemini AI._'\n    ].join('\\n'),\n    options: { parse_mode: \"Markdown\" }\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 470,
+        "y": 100,
+        "wires": [
+            [
+                "5d49fc4b1470e1ec"
+            ]
+        ]
+    },
+    {
+        "id": "2cbaebdf0d85f5c9",
         "type": "switch",
         "z": "6ff955ee3e10e431",
         "name": "Route intent",
@@ -82,6 +493,11 @@
             {
                 "t": "eq",
                 "v": "status",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "fuel",
                 "vt": "str"
             },
             {
@@ -116,12 +532,22 @@
             },
             {
                 "t": "eq",
-                "v": "matrix",
+                "v": "predictive",
                 "vt": "str"
             },
             {
                 "t": "eq",
-                "v": "shadow",
+                "v": "battery",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "audit",
+                "vt": "str"
+            },
+            {
+                "t": "eq",
+                "v": "weather",
                 "vt": "str"
             },
             {
@@ -130,15 +556,18 @@
         ],
         "checkall": "false",
         "repair": false,
-        "outputs": 11,
+        "outputs": 14,
         "x": 110,
-        "y": 180,
+        "y": 200,
         "wires": [
             [
-                "d869027d9431efc4"
+                "28120d13c081b49a"
             ],
             [
                 "ebcf04a7c62df620"
+            ],
+            [
+                "9cbc521f508cb6a9"
             ],
             [
                 "f739d6707013982c"
@@ -162,7 +591,14 @@
                 "4b57e38bbb17924e"
             ],
             [
-                "5cb6165420781567"
+                "11d757f635caae73"
+            ],
+            [
+                "96fb7365808dcd7c",
+                "63ae068f91114f13"
+            ],
+            [
+                "fec108bb236e9a94"
             ],
             [
                 "96fb7365808dcd7c",
@@ -171,240 +607,86 @@
         ]
     },
     {
-        "id": "d869027d9431efc4",
+        "id": "9cbc521f508cb6a9",
+        "type": "link out",
+        "z": "6ff955ee3e10e431",
+        "name": "To Fuel Logic",
+        "mode": "link",
+        "links": [
+            "2d855ee3e5e902df"
+        ],
+        "x": 415,
+        "y": 180,
+        "wires": []
+    },
+    {
+        "id": "11d757f635caae73",
         "type": "function",
         "z": "6ff955ee3e10e431",
-        "name": "Reply: Help",
-        "func": "msg.payload = {\n    chatId: msg.chatId,\n    type: 'message',\n    content: [\n        '🌬️ Komfovent valdymas',\n        '',\n        '📍 Pagrindinės komandos:',\n        '/status - Pilna parametrų suvestinė',\n        '/co2 - ☁️ Anglies dvideginio lygis',\n        '/fan - 📊 Ventiliatorių greitis',\n        '/mode - ⚙️ Veikimo režimas',\n        '/boost - 🚀 Aktyvus vėdinimas',\n        '/humidity - 💧 Drėgmė vonioje',\n        '/outdoor - ☀️ Lauko temperatūra',\n        '',\n        '📊 Prognozės:',\n        '/shadow - 🧠 Rizikos vertinimas ir prognozė',\n        '/matrix - 📊 Modelio branda ir duomenų kiekis',\n        '',\n        '🧠 Gemini AI asistentas:',\n        '• \"atlik vakar dienos auditą\" – išsami paros apžvalga',\n        '• \"kodėl dabar fan 35%?\" – logų interpretacija',\n        '• \"kiek liko filtrų resursų?\" – filtrų būsenos analizė',\n        '• \"palygink CO2 su vakar diena\" – istorinis palyginimas',\n        '',\n        '💡 Atsakymus pateikia Gemini AI.'\n    ].join('\\n')\n};\nreturn msg;",
+        "name": "Reply: /battery",
+        "func": "const ha = global.get('homeassistant') || {};\nconst states = (ha?.homeAssistant?.states) || (ha?.homeassistant?.states) || (ha?.states) || {};\n\nconst rows = [];\nfor (const [eid, st] of Object.entries(states)) {\n    if (!st || !st.attributes) continue;\n\n    const deviceClass = String(st.attributes.device_class || '').toLowerCase();\n    const isBattery = deviceClass === 'battery' || eid.toLowerCase().includes('battery');\n    if (!isBattery) continue;\n\n    const val = parseFloat(st.state);\n    if (!Number.isFinite(val)) continue;\n\n    // Standartinis filtras: Neįtraukiam telefonų ir planšečių\n    const friendly = (st.attributes.friendly_name || \"\").toLowerCase();\n    if (friendly.includes('phone') || friendly.includes('ipad') || friendly.includes('iphone')) continue;\n\n    rows.push({ id: eid, pct: Math.round(val) });\n}\n\n// RIKIAVIMAS: Nuo mažiausios reikšmės (silpniausios viršuje)\nrows.sort((a, b) => a.pct - b.pct);\n\nconst lines = rows.map(r => {\n    let icon = r.pct <= 10 ? \"🔴\" : (r.pct <= 20 ? \"🟡\" : \"🟢\");\n    // Formatas: Ikona entity_id - **XX%**\n    return `${icon} \\`${r.id}\\` - **${r.pct}%**`;\n});\n\nconst now = new Date();\nconst footer = `\\n\\n🕒 _Atnaujinta: ${now.toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' })} (${now.toLocaleDateString('lt-LT')})_`;\n\nmsg.payload = {\n    chatId: msg.chatId,\n    type: 'message',\n    content: lines.join('\\n') + footer,\n    options: { parse_mode: \"Markdown\" }\n};\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 290,
+        "x": 480,
+        "y": 540,
+        "wires": [
+            [
+                "5d49fc4b1470e1ec"
+            ]
+        ]
+    },
+    {
+        "id": "052998f52bfc0c6a",
+        "type": "link in",
+        "z": "6ff955ee3e10e431",
+        "name": "AI In: Predictive Data",
+        "links": [
+            "840315d40f2b49c4"
+        ],
+        "x": 745,
         "y": 100,
         "wires": [
             [
-                "5d49fc4b1470e1ec"
+                "4a07862693accec6"
             ]
         ]
     },
     {
-        "id": "ebcf04a7c62df620",
+        "id": "4a07862693accec6",
         "type": "function",
         "z": "6ff955ee3e10e431",
-        "name": "Reply: /status",
-        "func": "const g = global.get('homeassistant') || {};\n\nconst states =\n  (g?.homeAssistant?.states) ||\n  (g?.homeassistant?.states) ||\n  (g?.states) ||\n  {};\n\nconst ents = global.get('komfovent_entities') || {};\n\nfunction isBad(v) {\n  if (v === null || v === undefined) return true;\n  const s = String(v).trim().toLowerCase();\n  return (s === '' || s === 'unknown' || s === 'unavailable' || s === 'nan');\n}\n\nfunction getVal(id, unit = '', dec = 0) {\n  const raw = states[id]?.state;\n  if (isBad(raw)) return 'n/a';\n  const v = parseFloat(raw);\n  return isFinite(v) ? v.toFixed(dec) + unit : 'n/a';\n}\n\nfunction toLt(id) {\n  const raw = states[id]?.state;\n  if (isBad(raw)) return 'n/a';\n  const s = String(raw).toLowerCase();\n  return (s === 'on' || s === 'true') ? 'Aktyvus' : 'Išjungtas';\n}\n\n/* ===============================\n   Gartraukio būsena\n   - Light-only ignoruojama\n   - ON >= 75W\n   =============================== */\n\nlet hoodLine = '🧯 Gartraukis: Išjungta';\n\nconst hoodRaw = states['sensor.hood_socket_power']?.state;\nif (!isBad(hoodRaw)) {\n  const hoodP = parseFloat(hoodRaw);\n  if (isFinite(hoodP) && hoodP >= 75) {\n    const lvl = (hoodP >= 145) ? 3 : (hoodP >= 105) ? 2 : 1;\n    hoodLine = `🧯 Gartraukis: Įjungta (${lvl} lygis)`;\n  }\n}\n\nconst lines = [\n  `☁️ CO₂ lygis: ${getVal(ents.co2, ' ppm')}`,\n  `⚙️ Darbo režimas: ${states[ents.mode]?.state || 'n/a'}`,\n  `📊 Ventiliatorių greitis: ${getVal(ents.fan_actual, '%')}`,\n  `🌡️ Paduodama temperatūra: ${getVal(ents.intake_temp, '°C', 1)}`,\n  `❄️ Lauko temperatūra: ${getVal(ents.outdoor, '°C', 1)}`,\n  `💧 Drėgmė vonioje: ${getVal(ents.humidity, '%')}`,\n  `🚀 Aktyvus vėdinimas: ${toLt(ents.boost_ha)}`,\n  hoodLine,\n  `🔌 OVR: ${toLt(ents.ovr_ha)}`\n];\n\nmsg.payload = {\n  chatId: msg.chatId,\n  type: 'message',\n  content: lines.join('\\n')\n};\n\nreturn msg;",
+        "name": "Store last Predictive",
+        "func": "// Išsaugome paskutinę prognozę AI Gateway botui\nif (msg.log_type === 'predictive') {\n    const data = msg.log_record || msg.payload;\n    flow.set('predictive_last', data);\n    node.status({ fill: \"green\", shape: \"dot\", text: \"Išsaugota: \" + data.ts });\n}\nreturn null;",
         "outputs": 1,
-        "timeout": "",
+        "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 300,
-        "y": 140,
+        "x": 880,
+        "y": 80,
         "wires": [
-            [
-                "5d49fc4b1470e1ec"
-            ]
-        ]
-    },
-    {
-        "id": "f739d6707013982c",
-        "type": "function",
-        "z": "6ff955ee3e10e431",
-        "name": "Reply: /co2",
-        "func": "const g = global.get('homeassistant') || {};\nconst states =\n  (g.homeAssistant && g.homeAssistant.states) ? g.homeAssistant.states :\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\nconst ents = global.get('komfovent_entities') || {};\n\nconst raw = states[ents.co2]?.state;\nconst v = parseFloat(raw);\nconst content = isFinite(v) ? `☁️ CO₂ lygis: ${Math.round(v)} ppm` : `⚠️ CO₂ duomenų nėra: ${raw}`;\n\nmsg.payload = {\n    chatId: msg.chatId,\n    type: 'message',\n    content: content\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 290,
-        "y": 180,
-        "wires": [
-            [
-                "5d49fc4b1470e1ec"
-            ]
-        ]
-    },
-    {
-        "id": "056c66f67642fd8f",
-        "type": "function",
-        "z": "6ff955ee3e10e431",
-        "name": "Reply: /fan",
-        "func": "const g = global.get('homeassistant') || {};\nconst states =\n  (g.homeAssistant && g.homeAssistant.states) ? g.homeAssistant.states :\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\nconst ents = global.get('komfovent_entities') || {};\n\nconst actual = parseFloat(states[ents.fan_actual]?.state);\nconst content = isFinite(actual)\n    ? `📊 Ventiliatorių greitis: ${Math.round(actual)}%`\n    : `⚠️ Ventiliatorių duomenų nėra`;\n\nmsg.payload = {\n    chatId: msg.chatId,\n    type: 'message',\n    content: content\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 290,
-        "y": 220,
-        "wires": [
-            [
-                "5d49fc4b1470e1ec"
-            ]
-        ]
-    },
-    {
-        "id": "bec1627ba76b405e",
-        "type": "function",
-        "z": "6ff955ee3e10e431",
-        "name": "Reply: /mode",
-        "func": "const g = global.get('homeassistant') || {};\nconst states =\n  (g.homeAssistant && g.homeAssistant.states) ? g.homeAssistant.states :\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\nconst ents = global.get('komfovent_entities') || {};\n\nconst m = states[ents.mode]?.state;\nconst content = m ? `⚙️ Darbo režimas: ${m}` : `⚠️ Režimas nenustatytas`;\n\nmsg.payload = {\n    chatId: msg.chatId,\n    type: 'message',\n    content: content\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 300,
-        "y": 260,
-        "wires": [
-            [
-                "5d49fc4b1470e1ec"
-            ]
-        ]
-    },
-    {
-        "id": "5a5aa54bf7a78547",
-        "type": "function",
-        "z": "6ff955ee3e10e431",
-        "name": "Reply: /boost",
-        "func": "const g = global.get('homeassistant') || {};\nconst states =\n  (g.homeAssistant && g.homeAssistant.states) ? g.homeAssistant.states :\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\nconst ents = global.get('komfovent_entities') || {};\n\nfunction toLt(id) {\n    const s = String(states[id]?.state || '').toLowerCase();\n    return (s === 'on' || s === 'true') ? 'Aktyvus' : 'Išjungtas';\n}\n\nconst content = `🚀 Aktyvus vėdinimas (Boost): ${toLt(ents.boost_ha)}`;\n\nmsg.payload = {\n    chatId: msg.chatId,\n    type: 'message',\n    content: content\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 300,
-        "y": 300,
-        "wires": [
-            [
-                "5d49fc4b1470e1ec"
-            ]
-        ]
-    },
-    {
-        "id": "3816232c6a7c071d",
-        "type": "function",
-        "z": "6ff955ee3e10e431",
-        "name": "Reply: /humidity",
-        "func": "const g = global.get('homeassistant') || {};\nconst states =\n  (g.homeAssistant && g.homeAssistant.states) ? g.homeAssistant.states :\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\nconst ents = global.get('komfovent_entities') || {};\n\nconst v = parseFloat(states[ents.humidity]?.state);\nconst content = isFinite(v)\n    ? `💧 Drėgmė vonioje: ${v.toFixed(1)}%`\n    : `⚠️ Drėgmės duomenų nėra`;\n\nmsg.payload = {\n    chatId: msg.chatId,\n    type: 'message',\n    content: content\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 300,
-        "y": 340,
-        "wires": [
-            [
-                "5d49fc4b1470e1ec"
-            ]
-        ]
-    },
-    {
-        "id": "6c040c32e46a9512",
-        "type": "function",
-        "z": "6ff955ee3e10e431",
-        "name": "Reply: /outdoor",
-        "func": "const g = global.get('homeassistant') || {};\nconst states =\n  (g.homeAssistant && g.homeAssistant.states) ? g.homeAssistant.states :\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\n    ((g.homeassistant && g.homeassistant.states) ? g.homeassistant.states :\n      (g.states || {}));\n\nconst ents = global.get('komfovent_entities') || {};\n\nconst v = parseFloat(states[ents.outdoor]?.state);\nlet content = \"\";\n\nif (isFinite(v)) {\n    // 1. Parenkame ikoną pagal temperatūrą\n    let icon = (v >= 10) ? \"☀️\" : \"❄️\";\n    content = `${icon} Lauko temperatūra: ${v.toFixed(1)}°C\\n`;\n\n    // 2. Pridedame šeimos rekomendacijas\n    if (v <= -10) {\n        content += \"\\n🧤 Vaikams reikia žieminių drabužių!\";\n    }\n\n    if (v <= 0) {\n        content += \"\\n🚗 Laikas pašildyti automobilį.\";\n    } else if (v > 0 && v < 10) {\n        content += \"\\n🧥 Lauke vėsu, nepamirškite striukių.\";\n    } else if (v >= 20) {\n        content += \"\\n😎 Puikus oras pasivaikščiojimui!\";\n    }\n} else {\n    content = \"⚠️ Lauko temperatūros duomenų nėra\";\n}\n\nmsg.payload = {\n    chatId: msg.chatId,\n    type: 'message',\n    content: content\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 300,
-        "y": 380,
-        "wires": [
-            [
-                "5d49fc4b1470e1ec"
-            ]
-        ]
-    },
-    {
-        "id": "96fb7365808dcd7c",
-        "type": "function",
-        "z": "6ff955ee3e10e431",
-        "name": "Build AI context (paths)",
-        "func": "// Nustatomi keliai iki visų logų failų ir būsenos failų AI kontekstui.\n// PATAISYMAS: Įtrauktas filters_state.json kelias.\n\nconst TZ = 'Europe/Vilnius';\nconst logBase = '/data/logs/komfovent';\nconst stateBase = '/data/state/komfovent';\n\nfunction ltDate(d) {\n  return new Intl.DateTimeFormat('sv-SE', {\n    timeZone: TZ,\n    year: 'numeric',\n    month: '2-digit',\n    day: '2-digit'\n  }).format(d);\n}\n\nconst day = ltDate(new Date());\n\nmsg._logPaths = {\n  telemetry: `${logBase}/komfovent_telemetry_${day}.jsonl`,\n  control: `${logBase}/komfovent_control_${day}.jsonl`,\n  predictive: `${logBase}/komfovent_predictive_${day}.jsonl`,\n  filters: `${logBase}/komfovent_filters_${day}.jsonl`,\n  matrix: `${stateBase}/prediction_matrix.json`,\n  filters_state: `${stateBase}/filters_state.json`\n};\n\nnode.status({ fill: \"blue\", shape: \"dot\", text: `Paths ready for ${day}` });\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 330,
-        "y": 500,
-        "wires": [
-            [
-                "eb5198f89b492515"
-            ]
-        ]
-    },
-    {
-        "id": "eb5198f89b492515",
-        "type": "function",
-        "z": "6ff955ee3e10e431",
-        "name": "Tail telemetry cmd",
-        "func": "const p = msg._logPaths || {};\n\n// Skaitome būsenos failus ir ribotą logų istoriją (balansas tarp konteksto ir stabilumo).\n// - Telemetry: 50 eilučių (tendencijoms)\n// - Control: 30 eilučių (paskutiniai sprendimai / OVR / HOOD / boost)\n// - Predictive: 20 eilučių\n// - Filters: 10 eilučių\n\nmsg.payload = `bash -lc '` +\n  `if [ -f \"${p.matrix}\" ]; then echo \"=== MATRIX ===\"; cat \"${p.matrix}\"; fi; ` +\n  `if [ -f \"${p.filters_state}\" ]; then echo \"=== FILTERS_STATE ===\"; cat \"${p.filters_state}\"; fi; ` +\n  `if [ -f \"${p.telemetry}\" ] && [ \"${p.telemetry}\" != \"undefined\" ]; then echo \"=== $(basename ${p.telemetry}) ===\"; tail -n 50 \"${p.telemetry}\"; fi; ` +\n  `if [ -f \"${p.control}\" ] && [ \"${p.control}\" != \"undefined\" ]; then echo \"=== $(basename ${p.control}) ===\"; tail -n 30 \"${p.control}\"; fi; ` +\n  `if [ -f \"${p.predictive}\" ] && [ \"${p.predictive}\" != \"undefined\" ]; then echo \"=== $(basename ${p.predictive}) ===\"; tail -n 20 \"${p.predictive}\"; fi; ` +\n  `if [ -f \"${p.filters}\" ] && [ \"${p.filters}\" != \"undefined\" ]; then echo \"=== $(basename ${p.filters}) ===\"; tail -n 10 \"${p.filters}\"; fi; ` +\n  `'`;\n\nnode.status({ fill: \"blue\", shape: \"dot\", text: \"Reading logs: T50 C30 P20 F10\" });\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 570,
-        "y": 500,
-        "wires": [
-            [
-                "cde32ceab90e3ab7"
-            ]
-        ]
-    },
-    {
-        "id": "cde32ceab90e3ab7",
-        "type": "exec",
-        "z": "6ff955ee3e10e431",
-        "command": "",
-        "addpay": true,
-        "append": "",
-        "useSpawn": "false",
-        "timer": "",
-        "oldrc": false,
-        "name": "Exec: tail telemetry (stdout only)",
-        "x": 830,
-        "y": 500,
-        "wires": [
-            [
-                "47276443c90c79c0"
-            ],
-            [],
             []
         ]
     },
     {
-        "id": "47276443c90c79c0",
+        "id": "b75b36bb7aee20a7",
         "type": "function",
         "z": "6ff955ee3e10e431",
-        "name": "Capture All Logs",
-        "func": "// PATAISYMAS: Logų duomenys perkeliami į saugų kintamąjį.\nlet out = msg.payload;\nif (Buffer.isBuffer(out)) out = out.toString('utf8');\n\nconst logs = String(out || '').trim();\n\n// Išsaugome logus prompt builder'iui\nmsg._all_logs_context = logs;\n\n// Toliau nebevykdom papildomo Exec, todėl msg.payload nekeičiam.\n\nif (logs.length > 0) {\n    node.status({ fill: \"green\", shape: \"dot\", text: `Surinkta ${logs.length} simbolių` });\n} else {\n    node.status({ fill: \"yellow\", shape: \"ring\", text: \"Logų failai tušti\" });\n}\n\nreturn msg;",
+        "name": "Generate audit snapshot",
+        "func": "const logs = String(msg._all_logs_context || \"\").split('\\n');\nconst now = Date.now();\nconst oneHourAgo = now - (60 * 60 * 1000);\n\nlet co2Values = [];\nlet rates = [];\nlet boostCount = 0;\nlet hoodCount = 0;\nlet fanOnCount = 0;\nlet alarmStates = new Set();\n\nlet windowsCount = 0;\nlet ovrCount = 0;\nlet predictiveHardCount = 0;\n\nlet lastPredictiveTs = null;\nlet lastWindowsTs = null;\nlet lastOvrTs = null;\n\nlogs.forEach(line => {\n    try {\n        if (!line.includes('{')) return;\n        const d = JSON.parse(line.substring(line.indexOf('{')));\n        const ts = new Date(d.ts).getTime();\n        if (!Number.isFinite(ts)) return;\n\n        if (ts > oneHourAgo) {\n            if (d.module === 'telemetry') {\n                if (Number.isFinite(Number(d.co2))) co2Values.push(Number(d.co2));\n                if (Number.isFinite(Number(d.rate))) rates.push(Number(d.rate));\n                if (d.alarm_state) alarmStates.add(String(d.alarm_state));\n            }\n\n            if (d.module === 'control') {\n                if (d.boost_active === true) boostCount++;\n                if (d.gartraukis_veikia === true) {\n                    hoodCount++;\n                    lastPredictiveTs = lastPredictiveTs; // no-op, paliekam aiškumui\n                }\n\n                if (Number.isFinite(Number(d.fan_desired_in)) && Number(d.fan_desired_in) > 0) fanOnCount++;\n\n                if (d.windows_long_open === true) {\n                    windowsCount++;\n                    lastWindowsTs = d.ts || lastWindowsTs;\n                }\n\n                if (d.ovr_active === true) {\n                    ovrCount++;\n                    lastOvrTs = d.ts || lastOvrTs;\n                }\n\n                if (d.predictive_hard === true) {\n                    predictiveHardCount++;\n                    lastPredictiveTs = d.ts || lastPredictiveTs;\n                }\n            }\n        }\n    } catch (e) { }\n});\n\nconst stats = {\n    co2: co2Values.length ? {\n        min: Math.min(...co2Values),\n        max: Math.max(...co2Values),\n        avg: Math.round(co2Values.reduce((a, b) => a + b, 0) / co2Values.length)\n    } : null,\n\n    rate_max: rates.length ? Number(Math.max(...rates).toFixed(2)) : 0,\n    boost_events: boostCount,\n    hood_events: hoodCount,\n    fan_on_events: fanOnCount,\n    windows_events: windowsCount,\n    ovr_events: ovrCount,\n    predictive_hard_events: predictiveHardCount,\n    last_predictive_ts: lastPredictiveTs,\n    last_windows_ts: lastWindowsTs,\n    last_ovr_ts: lastOvrTs,\n    alarm_summary: Array.from(alarmStates).join(', ')\n};\n\nmsg._audit_snapshot = stats;\nreturn msg;",
         "outputs": 1,
-        "timeout": "",
+        "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 290,
-        "y": 580,
+        "x": 350,
+        "y": 740,
         "wires": [
             [
                 "cdf0a918f5808d27"
@@ -412,123 +694,19 @@
         ]
     },
     {
-        "id": "5d49fc4b1470e1ec",
-        "type": "telegram sender",
-        "z": "6ff955ee3e10e431",
-        "name": "Telegram Out",
-        "bot": "tg_bot_cfg_komfovent",
-        "outputs": 1,
-        "x": 540,
-        "y": 120,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "63ae068f91114f13",
-        "type": "link out",
-        "z": "6ff955ee3e10e431",
-        "name": "AI Out: Control Query",
-        "mode": "link",
-        "links": [
-            "1ed0cbe82dd78d30",
-            "2ce33c61ffe1a0b7"
-        ],
-        "x": 65,
-        "y": 340,
-        "wires": []
-    },
-    {
-        "id": "5e34d037680f59dc",
-        "type": "link in",
-        "z": "6ff955ee3e10e431",
-        "name": "AI In: Control Context",
-        "links": [
-            "a1ae1f426339e402",
-            "b92350a17d9b1a04"
-        ],
-        "x": 515,
-        "y": 220,
-        "wires": [
-            [
-                "ea555fdc1f28ec24"
-            ]
-        ]
-    },
-    {
-        "id": "ea555fdc1f28ec24",
+        "id": "fec108bb236e9a94",
         "type": "function",
         "z": "6ff955ee3e10e431",
-        "name": "Store last Control Context",
-        "func": "// Store last Control Context v4.4.1 (Bugfix)\n// Tikslas: teisingai paimti kontekstą iš Link In žinutės.\n// Problema: Control flow siunčia msg.ai_context, bet senas kodas žiūrėjo tik į msg.payload.\n\nlet ctx = null;\n\n// 1) Pirmas prioritetas: msg.ai_context (taip siunčia Control tab)\nif (msg && typeof msg === 'object' && msg.ai_context && typeof msg.ai_context === 'object') {\n    ctx = msg.ai_context;\n}\n\n// 2) Fallback: msg.payload.ai_context (jei kažkur supakuota į payload)\nif (!ctx && msg && typeof msg === 'object' && msg.payload && typeof msg.payload === 'object' && msg.payload.ai_context) {\n    ctx = msg.payload.ai_context;\n}\n\n// 3) Fallback: jei payload pats yra kontekstas\nif (!ctx && msg && typeof msg === 'object' && msg.payload && typeof msg.payload === 'object') {\n    // Heuristika: jei panašu į kontekstą (turi bent vieną tipinį lauką)\n    const p = msg.payload;\n    if (p.co2 !== undefined || p.rate_current !== undefined || p.fans !== undefined || p.rules !== undefined) {\n        ctx = p;\n    }\n}\n\n// 4) Fallback: jei payload yra JSON string\nif (!ctx && msg && typeof msg === 'object' && typeof msg.payload === 'string') {\n    try {\n        const parsed = JSON.parse(msg.payload);\n        if (parsed && typeof parsed === 'object') {\n            if (parsed.ai_context && typeof parsed.ai_context === 'object') ctx = parsed.ai_context;\n            else if (parsed.co2 !== undefined || parsed.rate_current !== undefined || parsed.fans !== undefined || parsed.rules !== undefined) ctx = parsed;\n        }\n    } catch (e) {\n        // ignore\n    }\n}\n\n// Jei vis tiek nėra – tiesiog nieko nedarom (kad nesugriautume srauto)\nif (!ctx || typeof ctx !== 'object') {\n    return null;\n}\n\n// Minimalus normalizavimas, kad Prompt Builder turėtų stabilias šaknis\nctx.fans = (ctx.fans && typeof ctx.fans === 'object') ? ctx.fans : {};\nctx.rules = (ctx.rules && typeof ctx.rules === 'object') ? ctx.rules : {};\n\n// Įrašom į flow kaip source-of-truth AI Gateway pusėje\nflow.set('control_context_last', ctx);\nflow.set('control_context_last_ts', Date.now());\n\n// Šis mazgas neturi tęsti srauto (tik “cache”)\nreturn null;",
+        "name": "Reply: /orai",
+        "func": "const ha = global.get('homeassistant');\nconst states = ha ? (ha.states || ha.homeAssistant?.states) : null;\n\nconst targetTracker = msg.tracker_id || \"device_tracker.g_iphone\";\nconst weather = states ? states['weather.weather_home'] : null;\nconst tracker = states ? states[targetTracker] : null;\n\nif (!weather || !tracker) {\n    msg.payload = { chatId: msg.chatId, type: 'message', content: '⚠️ Trūksta duomenų.' };\n    return msg;\n}\n\nconst attr = weather.attributes;\nconst lat = tracker.attributes.latitude;\nconst lon = tracker.attributes.longitude;\nconst isNotify = !!msg.target_app;\n\n// Vėjas m/s\nconst windMs = (attr.wind_speed / 3.6).toFixed(1);\nconst gustMs = (attr.wind_gust_speed / 3.6).toFixed(1);\n\nmsg.weatherState = weather.state;\nmsg.intent = 'weather';\n\nif (isNotify) {\n    // 📱 iOS PRANEŠIMAS (NELIEČIAMAS, nes sakėte, kad geras)\n    msg.ai_prompt = `\nEsi asmeninis asistentas. Rašyk tik LIETUVIŠKAI, draugiškai ir žmogiškai.\nUŽDUOTIS: Paruošk pranešimą iš dviejų pastraipų.\n1 PASTRAIPA (Situacija): Žmogiškai aprašyk orus, paminėk kritulius (jei yra kokie, jei nėra jog nėra). Nurodyk vietovę (miestas) pagal koordinates ${lat}, ${lon}., temp. (${attr.temperature}°C), kritulius (iš \"${weather.state}\") ir vėją (${windMs} m/s). LIMITAS: iki 146 simbolių.\n2 PASTRAIPA (Rekomendacija): Pateik tik esminę įžvalgą ar patarimą dėl sąlygų. LIMITAS: iki 109 simbolių.\nSVARBU: JOKIŲ palinkėjimų. JOKIO formatavimo.\n`;\n} else {\n    // 🤖 TELEGRAMAS (GRĄŽINAMAS ŽMOGIŠKAS IR IŠSAMUS TONAS)\n    msg.ai_prompt = `\nEsi asmeninis orų asistentas. Rašyk žmogiškai, šiltai ir draugiškai, tik LIETUVIŠKAI.\nSTILIUS: Rašyk vientisais paragrafais, nenaudok jokių sąrašų ar punktų (1., 2. ir t.t.).\n\nSTRUKTŪRA:\n1. PIRMA PASTRAIPA: Nurodyk vietovę (miestas, šalis) pagal koordinates ${lat}, ${lon}. Aprašyk esamus orus: temperatūra (**${attr.temperature}°C**), būsena (pagal \"${weather.state}\"), vėjas (**${windMs} m/s**, gūsiai **${gustMs} m/s**), drėgmė (**${attr.humidity}%**), slėgis (**${attr.pressure} hPa**). Svarbius skaičius PARYŠKINK.\n\n2. ANTRA PASTRAIPA: Pateik tik esmines įžvalgas (3-5 sakiniais) ar patarimą dėl sąlygų atsižvelgiant į temperatūrą, kritulius, vėją ir slėgį.\n\n3. TREČIA PASTRAIPA: Vienas stiprus, įkvepiantis motyvacinis sakinys dienai.\n\nTAISYKLĖS: Naudok tik **bold** formatavimą. Jokių emoji tekste, pasisveikinimų.\n`;\n}\n\nreturn msg;",
         "outputs": 1,
         "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 670,
-        "y": 220,
-        "wires": [
-            [
-                "5d49fc4b1470e1ec"
-            ]
-        ]
-    },
-    {
-        "id": "4b57e38bbb17924e",
-        "type": "function",
-        "z": "6ff955ee3e10e431",
-        "name": "Reply: /matrix",
-        "func": "const m = global.get('prediction_matrix') || {};\nif (!m.data) {\n    msg.payload = { chatId: msg.chatId, type: 'message', content: '❌ Matrica dar nesugeneruota. Laukite naktinio mokymosi (03:05).' };\n    return msg;\n}\nconst ci = m.confidence_info || {};\nconst lines = [\n    `📊 Modelio versija: v${m.model_ver || '6.1'}`,\n    `📅 Mokymosi laikas: ${m.training_days_actual || 0} d.`,\n    `📈 Tikslumas: ${(ci.level || 'n/a').toUpperCase()}`,\n    `🚀 Režimas: ${ci.is_live_ready ? 'Aktyvus' : 'Shadow mode'}`,\n    `🕒 Generuota: ${m.generated_at ? new Date(m.generated_at).toLocaleString('lt-LT') : 'n/a'}`\n];\nmsg.payload = { chatId: msg.chatId, type: 'message', content: lines.join('\\n') };\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 300,
-        "y": 420,
-        "wires": [
-            [
-                "5d49fc4b1470e1ec"
-            ]
-        ]
-    },
-    {
-        "id": "5cb6165420781567",
-        "type": "function",
-        "z": "6ff955ee3e10e431",
-        "name": "Reply: /shadow",
-        "func": "const u = flow.get('predictive_last') || {};\n\nif (!u.ts) {\n    msg.payload = {\n        chatId: msg.chatId,\n        type: 'message',\n        content: '⚠️ Predictive įrašų dar nėra.'\n    };\n    return msg;\n}\n\nconst lines = [\n    `🧠 Prognozės rizika: ${u.risk_score || 0}/10`,\n    `💨 CO₂ pokytis: ${u.co2} → ${u.co2_f_30} ppm (+30m)`,\n    `🎯 Z-Score (CO₂/Rate): ${(u.z_co2 || 0).toFixed(2)} / ${(u.z_rate || 0).toFixed(2)}`,\n    `📜 Statusas: ${String(u.anomaly_status || 'normal').toUpperCase()}`,\n    `🛠️ Rizikos korekcija: +${u.risk_adjust || 0}`\n];\n\nmsg.payload = {\n    chatId: msg.chatId,\n    type: 'message',\n    content: lines.join('\\n')\n};\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 300,
-        "y": 460,
-        "wires": [
-            [
-                "5d49fc4b1470e1ec"
-            ]
-        ]
-    },
-    {
-        "id": "cdf0a918f5808d27",
-        "type": "function",
-        "z": "6ff955ee3e10e431",
-        "name": "Build prompt (1 message)",
-        "func": "// Prompt Builder (Token Optimized) v7.11.2 (Bugfix + Style)\n// Tikslas: vientisas LT tekstas (3–5 sakiniai), be pasisveikinimų, kreipinys \"Tu\".\n// Bugfix: jei msg.ai_context tuščias, imam flow.control_context_last.\n\nconst ctx = (msg.ai_context && typeof msg.ai_context === 'object')\n  ? msg.ai_context\n  : (flow.get('control_context_last') || {});\n\nconst rawLogs = String(msg._all_logs_context || \"\");\nconst userText = String(msg.user_text || \"\").trim();\nconst qLower = userText.toLowerCase();\n\n// --- 1) Gating (tokenų taupymas) ---\nconst isPast = /(kada|paskutin|buvo|istorij|log|vyko|įvyko|prieš|vakar|anksčiau)/i.test(qLower);\nconst isHypo = /(kas būtų|scenarij|ką darytų|elgtųsi|jeigu|jei)/i.test(qLower);\n\n// --- 2) Pagalbinės funkcijos ---\nconst fans = (ctx.fans && typeof ctx.fans === 'object') ? ctx.fans : {};\nconst rules = (ctx.rules && typeof ctx.rules === 'object') ? ctx.rules : {};\n\nconst toNum = (v) => {\n  const n = Number(v);\n  return Number.isFinite(n) ? n : null;\n};\n\nconst hasNum = (v) => toNum(v) !== null;\n\nconst fmtInt = (v) => {\n  const n = toNum(v);\n  return (n === null) ? null : String(Math.round(n));\n};\n\nconst fmtRate = (v) => {\n  const n = toNum(v);\n  return (n === null) ? null : String(Number(n.toFixed(2)));\n};\n\n// --- 3) Faktų sakiniai (be \"n/a\") ---\nconst sents = [];\n\n// CO2 + rate\nconst co2 = fmtInt(ctx.co2);\nconst rate = fmtRate(ctx.rate_current);\nif (co2 && rate) sents.push(`Dabar CO₂ yra ${co2} ppm, o kilimo greitis ${rate} ppm/min`);\nelse if (co2) sents.push(`Dabar CO₂ yra ${co2} ppm`);\n\n// Fan IN/OUT + pressure\nconst fin = fmtInt(fans.fan_in);\nconst fout = fmtInt(fans.fan_out);\nif (fin && fout) {\n  let pText = '';\n  if (fans.pressure_state === 'positive_pressure') pText = '— palaikomas teigiamas slėgis (tiekimas didesnis)';\n  else if (fans.pressure_state === 'negative_pressure') pText = '— palaikomas neigiamas slėgis (ištraukimas didesnis)';\n  else pText = '— oro srautai subalansuoti';\n  sents.push(`Vėdinimas dirba ${fin}% (tiekimas) ir ${fout}% (ištraukimas) ${pText}`);\n}\n\n// Hood / boost / outdoor (tik jei turim)\nconst misc = [];\n\nif (fans.hood === true) misc.push(`gartraukis veikia ${fans.hood_level || 1} lygiu`);\nelse if (fans.hood === false) misc.push(`gartraukis išjungtas`);\n\nconst outdoor = fmtInt(ctx.outdoor);\nif (outdoor) misc.push(`lauke ${outdoor}°C`);\n\nif (ctx.boost_active === true) misc.push(`boost aktyvus`);\nelse if (ctx.boost_active === false) misc.push(`boost neaktyvus`);\n\nif (misc.length) sents.push(misc.join(', '));\n\n// Užtikrinam 3–5 sakinius: jei per mažai, pridedam trumpą “mode” sakinį (jei yra)\nconst mode = (ctx.mode && String(ctx.mode).trim()) ? String(ctx.mode).trim() : null;\nif (sents.length < 3 && mode) sents.push(`Režimas: ${mode}`);\n\n// --- 4) Hipotetinė logika (tik kai reikia) ---\n// Svarbu: tai instrukcija modeliui, ne “cituojamos taisyklės”\nlet logicBlock = \"\";\nif (isHypo) {\n  const thr = toNum(rules.rate_threshold_ppm_min);\n  const minCo2 = toNum(rules.min_co2_for_boost_ppm);\n  const prio = Array.isArray(rules.priority_order) ? rules.priority_order.join(' > ') : null;\n\n  const parts = [];\n  if (thr !== null) parts.push(`Boost scenarijus: įsijungia kai CO₂ kilimo greitis >= ${thr} ppm/min`);\n  if (minCo2 !== null) parts.push(`ir kai CO₂ >= ${Math.round(minCo2)} ppm`);\n  if (prio) parts.push(`Prioritetai: ${prio}`);\n\n  if (parts.length) logicBlock = parts.join('. ') + '.';\n}\n\n// --- 5) Logai (tik jei klausiama apie praeitį) ---\nlet logsBlock = \"\";\nif (isPast && rawLogs) {\n  // labai paprastas apkarpymas – laikom trumpą\n  logsBlock = rawLogs.slice(-2500);\n}\n\n// --- 6) Galutinis prompt ---\nconst factsText = sents.filter(Boolean).join('. ').trim() + (sents.length ? '.' : '');\n\nmsg.ai_prompt = `\nEsi Komfovent namų asistentas-inžinierius. Rašyk tik LIETUVIŠKAI.\nKreipkis „Tu“. Be pasisveikinimų ir be „atsiprašau“. Be sąrašų, brūkšnelių, žvaigždučių (*) ir emoji.\nAtsakyk 3–5 sakiniais, vienu vientisu paragrafu. Atsakyk tik į klausimą.\n\n${factsText}\n${logicBlock ? logicBlock : \"\"}\n\n${(isPast && logsBlock) ? `Jei klausiama apie praeitį, remkis šiuo logų fragmentu:\\n${logsBlock}` : \"\"}\n\nKLAUSIMAS: ${userText}\n`.trim();\n\nreturn msg;",
-        "outputs": 1,
-        "timeout": "",
-        "noerr": 0,
-        "initialize": "",
-        "finalize": "",
-        "libs": [],
-        "x": 530,
-        "y": 580,
+        "x": 470,
+        "y": 640,
         "wires": [
             [
                 "433da280ca0fe8f5"
@@ -536,63 +714,142 @@
         ]
     },
     {
-        "id": "433da280ca0fe8f5",
+        "id": "morning_weather_timer",
+        "type": "inject",
+        "z": "6ff955ee3e10e431",
+        "name": "Gedimino pranešimas (07:05)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "05 07 * * 1,2,3,4,5",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "",
+        "payloadType": "str",
+        "x": 180,
+        "y": 820,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "prepare_auto_weather",
         "type": "function",
         "z": "6ff955ee3e10e431",
-        "name": "Prepare Gemini request",
-        "func": "const MODEL = 'gemini-2.0-flash';\nconst API_KEY = (typeof env !== 'undefined' && env.get) ? env.get('GEMINI_API_KEY') : null;\nconst key = API_KEY || flow.get('GEMINI_API_KEY');\n\nif (!key) {\n  node.status({ fill: 'red', shape: 'ring', text: 'No GEMINI_API_KEY' });\n  msg.payload = { chatId: msg.chatId, type: 'message', content: 'AI neveikia: nėra GEMINI_API_KEY.' };\n  return [msg, null];\n}\n\nmsg.method = 'POST';\nmsg.url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`;\nmsg.headers = { 'Content-Type': 'application/json' };\n\nmsg.payload = {\n  contents: [\n    { role: 'user', parts: [ { text: msg.ai_prompt } ] }\n  ],\n  generationConfig: {\n    temperature: 0.3,\n    maxOutputTokens: 650\n  }\n};\n\nnode.status({ fill: 'blue', shape: 'dot', text: 'AI request...' });\nreturn [null, msg];",
-        "outputs": 2,
-        "timeout": "",
+        "name": "Nustatyti ID ir Intent",
+        "func": "// Paimame tavo ID iš globalių kintamųjų (kaip ir tavo pagrindiniame sraute)\nconst ALLOWED = Number(env.get(\"MY_TELEGRAM_ID\")) || global.get(\"ALLOWED_TELEGRAM_ID\");\n\nmsg.chatId = ALLOWED;\nmsg.intent = \"weather\";\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
         "noerr": 0,
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 790,
-        "y": 580,
+        "x": 460,
+        "y": 820,
         "wires": [
-            [],
             [
-                "5944086c10a6f826"
+                "fec108bb236e9a94"
             ]
         ]
     },
     {
-        "id": "5944086c10a6f826",
-        "type": "http request",
+        "id": "f8048bb3bf8245f3",
+        "type": "inject",
         "z": "6ff955ee3e10e431",
-        "name": "HTTP → Gemini",
-        "method": "use",
-        "ret": "obj",
-        "paytoqs": "ignore",
-        "url": "",
-        "tls": "",
-        "persist": false,
-        "proxy": "",
-        "insecureHTTPParser": false,
-        "authType": "",
-        "senderr": true,
-        "headers": [],
-        "x": 1020,
-        "y": 580,
+        "name": "Godos pranešimas (06:45)",
+        "props": [],
+        "repeat": "",
+        "crontab": "45 06 * * 1,2,3,4,5",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "x": 160,
+        "y": 880,
         "wires": [
             [
-                "de086cbcb3ed9711"
+                "3df84b4d7d8abc01"
             ]
         ]
     },
     {
-        "id": "de086cbcb3ed9711",
+        "id": "3df84b4d7d8abc01",
         "type": "function",
         "z": "6ff955ee3e10e431",
-        "name": "Parse Gemini → Telegram (single msg)",
-        "func": "let txt = '';\nlet errTxt = '';\n\nif (msg.statusCode && msg.statusCode >= 400) {\n  const e = msg.payload?.error?.message || JSON.stringify(msg.payload);\n  errTxt = `AI klaida (${msg.statusCode}): ${e}`;\n}\n\nif (!errTxt) {\n  try {\n    const parts = msg.payload?.candidates?.[0]?.content?.parts;\n    if (Array.isArray(parts) && parts.length) {\n      txt = parts.map(p => p.text).filter(Boolean).join('\\n');\n    }\n  } catch (e) {}\n}\n\nif (!txt && errTxt) txt = errTxt;\nif (!txt) txt = 'AI atsakymas tuščias / nepavyko perskaityti.';\n\nconst MAX = 3800;\nif (txt.length > MAX) {\n  txt = txt.slice(0, MAX) + '\\n\\n(…sutruminta, nes per ilga vienai žinutei)';\n}\n\nmsg.payload = { chatId: msg.chatId, type: 'message', content: txt };\nreturn msg;",
+        "name": "Paruošti Godos duomenis",
+        "func": "msg.intent = \"weather\";\nmsg.target_app = \"notify.mobile_app_go_iphone\";\nmsg.tracker_id = \"device_tracker.godos_iphone\";\nreturn msg;",
         "outputs": 1,
+        "timeout": 0,
         "noerr": 0,
-        "x": 1190,
-        "y": 480,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 470,
+        "y": 880,
+        "wires": [
+            [
+                "fec108bb236e9a94"
+            ]
+        ]
+    },
+    {
+        "id": "15c5c4da23863c77",
+        "type": "api-call-service",
+        "z": "6ff955ee3e10e431",
+        "name": "Siųsti į iPhone",
+        "server": "de0e06cd.8456e8",
+        "version": 7,
+        "debugenabled": false,
+        "action": "notify.mobile_app_go_iphone",
+        "floorId": [],
+        "areaId": [],
+        "deviceId": [],
+        "entityId": [],
+        "labelId": [],
+        "data": "{\t  \"title\": weatherIcon & \" Ryto apžvalga\",\t  \"message\": payload.content\t}",
+        "dataType": "jsonata",
+        "mergeContext": "",
+        "mustacheAltTags": false,
+        "outputProperties": [],
+        "queue": "none",
+        "blockInputOverrides": false,
+        "domain": "notify",
+        "service": "mobile_app_go_iphone",
+        "x": 920,
+        "y": 260,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "93e57766e58feed5",
+        "type": "switch",
+        "z": "6ff955ee3e10e431",
+        "name": "Switch",
+        "property": "target_app",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "null"
+            },
+            {
+                "t": "nnull"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 1350,
+        "y": 680,
         "wires": [
             [
                 "5d49fc4b1470e1ec"
+            ],
+            [
+                "15c5c4da23863c77"
             ]
         ]
     },
@@ -624,11 +881,42 @@
         "verboselogging": false
     },
     {
-        "id": "8a3a5e6424ada3b9",
+        "id": "de0e06cd.8456e8",
+        "type": "server",
+        "name": "Home Assistant",
+        "version": 6,
+        "addon": false,
+        "rejectUnauthorizedCerts": false,
+        "ha_boolean": [
+            "y",
+            "yes",
+            "true",
+            "on",
+            "home",
+            "open"
+        ],
+        "connectionDelay": true,
+        "cacheJson": true,
+        "heartbeat": false,
+        "heartbeatInterval": "30",
+        "areaSelector": "friendlyName",
+        "deviceSelector": "friendlyName",
+        "entitySelector": "friendlyName",
+        "statusSeparator": "at: ",
+        "statusYear": "hidden",
+        "statusMonth": "short",
+        "statusDay": "numeric",
+        "statusHourCycle": "h23",
+        "statusTimeFormat": "h:m",
+        "enableGlobalContextStore": true
+    },
+    {
+        "id": "a1375e3cc8792c05",
         "type": "global-config",
         "env": [],
         "modules": {
-            "node-red-contrib-telegrambot": "17.0.5"
+            "node-red-contrib-telegrambot": "17.0.5",
+            "node-red-contrib-home-assistant-websocket": "0.80.3"
         }
     }
 ]
