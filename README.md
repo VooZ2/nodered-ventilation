@@ -111,10 +111,6 @@ system safety logic**.
 
 ------------------------------------------------------------------------
 
-<img width="1256" height="871" alt="Screenshot 2026-02-18 at 20 52 42" src="https://github.com/user-attachments/assets/11930ba9-006c-4084-bae4-642ccb76077f" />
-
-------------------------------------------------------------------------
-
 # 🧠 Real‑Time Control Logic
 
 Ventilation decisions follow strict priority order:
@@ -198,7 +194,7 @@ You can also ask natural language questions:
 The system uses **Smart Gating**, sending historical logs to AI only
 when necessary.
 
-<img width="1353" height="876" alt="Screenshot 2026-02-12 at 22 44 38" src="https://github.com/user-attachments/assets/1fe7d7c5-12a0-4346-b5e2-797aa92df2a8" />
+<img width="1256" height="871" alt="Screenshot 2026-02-18 at 20 52 42" src="https://github.com/user-attachments/assets/11930ba9-006c-4084-bae4-642ccb76077f" />
 
 ------------------------------------------------------------------------
 
@@ -218,7 +214,7 @@ Available telemetry includes:
 Node‑RED performs all calculations; Home Assistant provides sensors and
 integrations.
 
-`<img width="1353" height="876" alt="Screenshot 2026-02-12 at 22 44 38" src="https://github.com/user-attachments/assets/1fe7d7c5-12a0-4346-b5e2-797aa92df2a8" />`{=html}
+<img width="1256" height="871" alt="Screenshot 2026-02-18 at 20 52 42" src="https://github.com/user-attachments/assets/11930ba9-006c-4084-bae4-642ccb76077f" />
 
 ------------------------------------------------------------------------
 
