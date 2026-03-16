@@ -8,7 +8,99 @@ MAJOR.MINOR.PATCH
 
 - MAJOR – architektūriniai ar esminiai logikos pakeitimai  
 - MINOR – naujos funkcijos  
-- PATCH – klaidų taisymai ir smulkūs patobulinimai  
+- PATCH – klaidų taisymai ir smulkūs patobulinimai
+
+---
+
+# \[5.0.0\] -- 2026-03-16
+
+### Predictive ventiliacijos valdymas ir AI Gateway architektūra
+
+Ši versija yra esminis architektūrinis atnaujinimas. Sistema papildyta
+**predictive valdymo moduliu**, leidžiančiu prognozuoti CO₂ augimą ir iš
+anksto adaptuoti ventiliacijos intensyvumą. Taip pat įdiegtas **AI
+Gateway sluoksnis**, leidžiantis interpretuoti sistemos būseną ir
+istoriją per Telegram sąsają.
+
+------------------------------------------------------------------------
+
+## Pridėta
+
+### Predictive Control Engine
+
+-   Įdiegtas **predictive režimas**, galintis adaptuoti ventiliaciją
+    pagal CO₂ prognozę.
+-   Skaičiuojamos **30 ir 60 min CO₂ prognozės** pagal istorinius
+    telemetrijos duomenis.
+-   Naudojamas **bucket-based elgsenos modelis** ir rizikos įvertinimas.
+-   Predictive aktyvacija priklauso nuo modelio brandos, prognozės ir
+    sistemos būsenos.
+
+### AI Gateway
+
+-   Įdiegtas **AI interpretacijos sluoksnis** per Telegram.
+-   AI gali interpretuoti:
+    -   sistemos būseną
+    -   telemetrijos istoriją
+    -   predictive modelio būseną.
+
+### Audit Snapshot
+
+-   Įdiegtas struktūruotas **audit snapshot** generavimas iš logų.
+-   Naudojamas AI analizei ir diagnostikai.
+
+------------------------------------------------------------------------
+
+## Pakeista
+
+### Control log schema
+
+Control log papildytas naujais laukais:
+
+-   `predictive_active`
+-   `predictive_risk`
+-   `co2_forecast_30`
+-   `co2_forecast_60`
+
+Schema atnaujinta į **v8 (Predictive-aware Control Logging)**.
+
+### Control prioritetų modelis
+
+Predictive režimas įtrauktas į valdymo prioritetų seką:
+
+    STOP FLAGS
+    OVR
+    Alarm Away
+    Windows
+    Hood
+    Predictive
+    Day/Night
+    Rate Boost
+
+Predictive negali perrašyti aukštesnio prioriteto saugos režimų.
+
+------------------------------------------------------------------------
+
+## Architektūra
+
+Nuo šios versijos sistema turi tris pagrindinius sluoksnius:
+
+    Control Logic
+    Predictive Engine
+    AI Gateway
+
+AI sluoksnis interpretuoja sistemos veikimą, bet **tiesiogiai jos
+nevaldo**.
+
+------------------------------------------------------------------------
+
+## Rezultatas
+
+Sistema dabar gali:
+
+-   prognozuoti CO₂ augimą
+-   adaptuoti ventiliacijos intensyvumą iš anksto
+-   pateikti AI pagrįstą sistemos veikimo interpretaciją.
 
 ---
 
